@@ -1,6 +1,7 @@
 import sharp from "sharp";
 import { describe, expect, it } from "vitest";
 import { MAX_DIMENSION_PX, MAX_UPLOAD_BYTES } from "./constants.js";
+import type { ImageEncoder } from "./image-encoder.js";
 import { processUploadedImage } from "./process-image.js";
 
 async function makeJpeg(width: number, height: number): Promise<Buffer> {
@@ -48,6 +49,57 @@ describe("processUploadedImage", () => {
     if (!result.ok) throw new Error("unreachable");
     const processedPixels = await sharp(result.image.bytes).raw().toBuffer();
     expect(processedPixels).toEqual(sourcePixels);
+  });
+
+  it("uses an injected encoder in place of the default", async () => {
+    const bytes = await makeJpeg(600, 400);
+    let calledWithSourceFormat: string | undefined;
+    // Encodes to png (not webp) so the assertions below can only pass if
+    // processUploadedImage actually delegates to this encoder rather than
+    // hardcoding webp anywhere else in its own pipeline.
+    const fakeEncoder: ImageEncoder = {
+      async encode({ pipeline, sourceFormat }) {
+        calledWithSourceFormat = sourceFormat;
+        const data = await pipeline.png().toBuffer();
+        return { data, contentType: "application/x-test-encoder" };
+      },
+    };
+
+    const result = await processUploadedImage(bytes, 100, { encoder: fakeEncoder });
+    expect(calledWithSourceFormat).toBe("jpeg");
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("unreachable");
+    expect(result.image.contentType).toBe("application/x-test-encoder");
+    const meta = await sharp(result.image.bytes).metadata();
+    expect(meta.format).toBe("png");
+  });
+
+  it("re-encodes a jpeg source lossily by default, substantially smaller than a forced-lossless encode of the same downscaled image", async () => {
+    // Noise (not a flat fill) for the same reason as the lossless round-trip
+    // test above: a solid color compresses to near-nothing under either
+    // webp mode and can't distinguish lossy from lossless output size.
+    const width = 800;
+    const height = 600;
+    const noise = Buffer.from(Array.from({ length: width * height * 3 }, () => Math.floor(Math.random() * 256)));
+    const jpeg = await sharp(noise, { raw: { width, height, channels: 3 } }).jpeg({ quality: 95 }).toBuffer();
+
+    const lossyResult = await processUploadedImage(jpeg, 100);
+    expect(lossyResult.ok).toBe(true);
+    if (!lossyResult.ok) throw new Error("unreachable");
+
+    const forceLosslessEncoder: ImageEncoder = {
+      async encode({ pipeline }) {
+        const data = await pipeline.webp({ lossless: true }).toBuffer();
+        return { data, contentType: "image/webp" };
+      },
+    };
+    const losslessResult = await processUploadedImage(jpeg, 100, { encoder: forceLosslessEncoder });
+    expect(losslessResult.ok).toBe(true);
+    if (!losslessResult.ok) throw new Error("unreachable");
+
+    // Conservative floor (see format-aware-webp-encoder.test.ts for the full
+    // rationale and the ~2.8x figure measured on photographic content).
+    expect(lossyResult.image.bytes.length).toBeLessThan(losslessResult.image.bytes.length / 1.5);
   });
 
   it("accepts png and webp inputs", async () => {
