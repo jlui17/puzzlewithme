@@ -30,6 +30,22 @@ import {
 // piece under linear filtering at fractional zoom.
 const TILE_PAD = 2;
 
+// Outward edge bleed in atlas texels. clip() antialiases the outline, so a
+// piece's boundary texels carry fractional alpha; two snapped pieces share the
+// identical curve (path.ts) but are baked in separate tiles with independent
+// pixel grids, so their AA coverage doesn't sum to 1 where they abut and the
+// deficit lets the dark board show through as a thin black seam at joints. We
+// re-stamp each piece's clipped draw at 8 sub-texel offsets to dilate its opaque
+// region outward by BLEED_PX, so at every seam point at least one side is fully
+// opaque and the board can't peek through.
+//
+// BLEED_PX = 1: lower bound is >=1 texel, the minimum overlap that closes the
+// sub-texel AA gap between the two independently-rasterized edges. Upper bound is
+// < TILE_PAD (2), so even where a tab tip touches its tile border the bleed lands
+// in the transparent gutter and never reaches a neighbor cell's frame rectangle.
+// Chosen at the low end of that 1..2 window; not measured on-device.
+const BLEED_PX = 1;
+
 export interface AtlasResult {
   /** Per-piece sub-texture keyed by piece id. */
   pieceTextures: Map<number, Texture>;
@@ -88,15 +104,8 @@ export function buildAtlases(
 
       const cell = piece.framePosition;
 
-      ctx.save();
-      // Enter tile space: origin at the piece's cell origin, 1 unit = 1 world unit.
-      ctx.translate(slotX, slotY);
-      ctx.scale(pixelScale, pixelScale);
-      ctx.translate(OVERHANG, OVERHANG);
-
       // Clip to the piece outline (local coords are relative to the cell origin).
       const path = new Path2D(pieceSvgPath(piece, { local: true }));
-      ctx.clip(path);
 
       // Draw the image region under this tile. Source rect maps the tile's world
       // box to image pixels; drawImage clips a partly-off-image source (border
@@ -105,8 +114,34 @@ export function buildAtlases(
       const srcY = (cell.y - OVERHANG) * imgScaleY;
       const srcW = TILE_WORLD * imgScaleX;
       const srcH = TILE_WORLD * imgScaleY;
-      ctx.drawImage(image, srcX, srcY, srcW, srcH, -OVERHANG, -OVERHANG, TILE_WORLD, TILE_WORLD);
-      ctx.restore();
+
+      // Stamp the clipped piece at a pixel offset. Offsetting the whole tile
+      // space moves clip and image together, so a shifted stamp is the same piece
+      // translated by (dx, dy) atlas texels.
+      const stamp = (dx: number, dy: number): void => {
+        ctx.save();
+        ctx.translate(slotX + dx, slotY + dy);
+        ctx.scale(pixelScale, pixelScale);
+        ctx.translate(OVERHANG, OVERHANG);
+        ctx.clip(path);
+        ctx.drawImage(image, srcX, srcY, srcW, srcH, -OVERHANG, -OVERHANG, TILE_WORLD, TILE_WORLD);
+        ctx.restore();
+      };
+
+      // 8-way dilation: the diagonal stamps matter because a texel one unit
+      // diagonally outside the outline is reached only by the diagonal offset;
+      // the axis stamps each miss it in the other axis. Centered stamp drawn last
+      // so its opaque interior sits on top and the piece stays crisp inside.
+      const b = BLEED_PX;
+      stamp(-b, -b);
+      stamp(0, -b);
+      stamp(b, -b);
+      stamp(-b, 0);
+      stamp(b, 0);
+      stamp(-b, b);
+      stamp(0, b);
+      stamp(b, b);
+      stamp(0, 0);
     }
 
     const atlasTexture = Texture.from(canvas);
