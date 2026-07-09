@@ -30,6 +30,26 @@ describe("processUploadedImage", () => {
     expect(meta.format).toBe("webp");
   });
 
+  it("re-encodes losslessly: decoded pixels match the source exactly", async () => {
+    // Noise, not a flat fill: a solid color round-trips exactly under *any*
+    // webp mode (lossy included), so it can't distinguish lossless from
+    // quality-90 the way pixel noise (near worst-case for compression) can.
+    // 512x512 clears MIN_CELL_PX (50px) at tier 100's ~10x10 grid; a smaller
+    // image would fail resolution validation before reaching the lossless
+    // re-encode this test targets.
+    const width = 512;
+    const height = 512;
+    const noise = Buffer.from(Array.from({ length: width * height * 3 }, () => Math.floor(Math.random() * 256)));
+    const source = await sharp(noise, { raw: { width, height, channels: 3 } }).png().toBuffer();
+    const sourcePixels = await sharp(source).raw().toBuffer();
+
+    const result = await processUploadedImage(source, 100);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("unreachable");
+    const processedPixels = await sharp(result.image.bytes).raw().toBuffer();
+    expect(processedPixels).toEqual(sourcePixels);
+  });
+
   it("accepts png and webp inputs", async () => {
     const png = await makePng(900, 900);
     const pngResult = await processUploadedImage(png, 100);

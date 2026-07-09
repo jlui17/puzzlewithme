@@ -1,12 +1,6 @@
 import { deriveGrid, type Grid, type Tier } from "@puzzlewithme/geometry";
 import sharp from "sharp";
-import {
-  ALLOWED_IMAGE_FORMATS,
-  MAX_DIMENSION_PX,
-  MAX_UPLOAD_BYTES,
-  MIN_CELL_PX,
-  STORED_WEBP_QUALITY,
-} from "./constants.js";
+import { ALLOWED_IMAGE_FORMATS, MAX_DIMENSION_PX, MAX_UPLOAD_BYTES, MIN_CELL_PX } from "./constants.js";
 
 export interface ProcessedImage {
   bytes: Buffer;
@@ -32,7 +26,11 @@ export type ProcessImageResult =
  * Validate and normalize an uploaded room image (FR-1, FR-2, §7.1). Always
  * re-encodes to webp — one stored format means one code path for serving
  * and for any future re-processing, and webp comfortably beats jpeg/png at
- * matched quality for the photographic content this app expects.
+ * matched quality for the photographic content this app expects. Encoded
+ * lossless: the user's own upload is the only copy ever stored, so there's
+ * no source to re-derive from if a lossy re-encode degraded it, and pieces
+ * are small crops of the whole (compression artifacts near a piece seam are
+ * more visible there than they'd be viewing the full photo).
  *
  * Format is read from the file's actual decoded bytes (sharp's metadata),
  * never a client-supplied Content-Type header, since that header is
@@ -94,7 +92,7 @@ export async function processUploadedImage(bytes: Buffer, tier: Tier): Promise<P
       // fit: "inside" + withoutEnlargement preserves aspect ratio and never
       // upscales a smaller-than-cap image (FR-2 is a ceiling, not a target).
       .resize({ width: MAX_DIMENSION_PX, height: MAX_DIMENSION_PX, fit: "inside", withoutEnlargement: true })
-      .webp({ quality: STORED_WEBP_QUALITY })
+      .webp({ lossless: true })
       .toBuffer({ resolveWithObject: true }));
   } catch {
     return { ok: false, reason: "could not process image data; the file may be corrupt or not an image" };

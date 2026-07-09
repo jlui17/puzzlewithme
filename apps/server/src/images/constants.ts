@@ -30,11 +30,3 @@ export const MAX_DIMENSION_PX = 2048;
  * requirement this floor is meant to catch.)
  */
 export const MIN_CELL_PX = 50;
-
-/**
- * webp quality for the single stored/served copy. Guessed toward fidelity
- * over file size (sharp's own default is 80) since players zoom into
- * individual piece crops, which magnifies compression artifacts more than
- * viewing the whole photo at once would.
- */
-export const STORED_WEBP_QUALITY = 90;
