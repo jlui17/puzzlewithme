@@ -1,0 +1,63 @@
+/**
+ * Browser implementations of the injected seams (deliverable 4). This is the
+ * ONLY file in the module allowed to touch browser globals (WebSocket,
+ * localStorage, performance, setTimeout); the core imports the interfaces, the
+ * UI imports these adapters. Keeping the globals here is what lets the core run
+ * DOM-free under vitest's node environment.
+ */
+import type { Clock, Scheduler, SocketFactory, SyncSocket, TimerHandle, TokenStorage } from "./interfaces";
+
+/** A SocketFactory backed by the browser WebSocket at `url`. */
+export function createBrowserSocketFactory(url: string): SocketFactory {
+  return () => {
+    const ws = new WebSocket(url);
+    const socket: SyncSocket = {
+      send: (data) => ws.send(data),
+      close: () => ws.close(),
+      onopen: null,
+      onmessage: null,
+      onclose: null,
+      onerror: null,
+    };
+    ws.onopen = () => socket.onopen?.();
+    ws.onmessage = (event) =>
+      socket.onmessage?.(typeof event.data === "string" ? event.data : String(event.data));
+    ws.onclose = () => socket.onclose?.();
+    ws.onerror = (event) => socket.onerror?.(event);
+    return socket;
+  };
+}
+
+export const browserClock: Clock = {
+  now: () => performance.now(),
+};
+
+export const browserScheduler: Scheduler = {
+  setTimer: (callback, delayMs) => setTimeout(callback, delayMs) as unknown as TimerHandle,
+  clearTimer: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
+};
+
+/**
+ * TokenStorage over localStorage (FR-24). Wrapped in try/catch because a
+ * browser in private mode or with storage disabled throws on access; a missing
+ * token just means "first visit", which is a valid state.
+ */
+export function createLocalStorageTokenStorage(key: string): TokenStorage {
+  return {
+    load: () => {
+      try {
+        return localStorage.getItem(key);
+      } catch {
+        return null;
+      }
+    },
+    save: (token) => {
+      try {
+        localStorage.setItem(key, token);
+      } catch {
+        // Non-persistent resume is acceptable; the player just gets a new
+        // identity next visit rather than resuming (FR-24 best-effort).
+      }
+    },
+  };
+}
