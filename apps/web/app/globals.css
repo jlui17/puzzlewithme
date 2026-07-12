@@ -240,13 +240,20 @@ a {
   width: 240px;
   max-height: calc(100% - 32px);
   overflow-y: auto;
-  background: rgba(22, 27, 34, 0.92);
+  /* 0.55: low enough that pieces underneath stay visible through the panel
+     (mobile boards have no room to route around it), high enough that text
+     over a busy puzzle image stays legible. Picked by eye, not measured. */
+  background: rgba(22, 27, 34, 0.55);
   backdrop-filter: blur(6px);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   padding: 14px;
   font-size: 13px;
+  /* The panel sits on top of the board canvas; it must never itself capture
+     touch/pointer input, or pieces underneath become unreachable on mobile.
+     Interactive children (the rename input/label below) opt back in. */
+  pointer-events: none;
 }
 
 .progress-head {
@@ -306,6 +313,9 @@ a {
 
 .player-name.self {
   font-weight: 600;
+  /* Only genuinely interactive element in the (pointer-events: none) panel:
+     clicking your own name starts the rename flow. */
+  pointer-events: auto;
 }
 
 .player-name input {
@@ -314,6 +324,7 @@ a {
   border: 1px solid var(--accent);
   border-radius: 6px;
   padding: 3px 6px;
+  pointer-events: auto;
 }
 
 .player-score {

@@ -2,6 +2,7 @@ import { boardBounds, CELL_SIZE } from "@puzzlewithme/geometry";
 import {
   MAX_ZOOM_CELL_FILL,
   MIN_ZOOM_BOARD_MARGIN,
+  PAN_OVERSCROLL_PX,
 } from "./constants";
 
 /**
@@ -57,38 +58,38 @@ export function clampScale(scale: number, rows: number, cols: number, vp: Viewpo
 
 /**
  * Clamp the pan offset so the board can't be dragged entirely out of view
- * (FR-26 "within the board bounds"). When the board is smaller than the
- * viewport on an axis (zoomed out past fit), it's centered on that axis.
+ * (FR-26 "within the board bounds"), while still leaving PAN_OVERSCROLL_PX of
+ * slack on every side (see constants.ts) so the camera always has *some* pan
+ * range to escape fixed UI overlays, even on axes where the board is smaller
+ * than the viewport.
  */
 export function clampCamera(cam: Camera, rows: number, cols: number, vp: Viewport): Camera {
   const b = boardBounds(rows, cols);
   const worldW = (b.maxX - b.minX) * cam.scale;
   const worldH = (b.maxY - b.minY) * cam.scale;
 
-  let x = cam.x;
-  let y = cam.y;
+  const left = b.minX * cam.scale + cam.x;
+  const top = b.minY * cam.scale + cam.y;
 
-  // Board screen extent on each axis: [board*scale + offset].
-  if (worldW <= vp.width) {
-    // Board narrower than viewport: center it so it can't drift to an edge.
-    x = (vp.width - worldW) / 2 - b.minX * cam.scale;
-  } else {
-    const left = b.minX * cam.scale + cam.x;
-    const right = b.maxX * cam.scale + cam.x;
-    if (left > 0) x = cam.x - left;
-    else if (right < vp.width) x = cam.x + (vp.width - right);
-  }
+  const clampedLeft = clampEdge(left, worldW, vp.width);
+  const clampedTop = clampEdge(top, worldH, vp.height);
 
-  if (worldH <= vp.height) {
-    y = (vp.height - worldH) / 2 - b.minY * cam.scale;
-  } else {
-    const top = b.minY * cam.scale + cam.y;
-    const bottom = b.maxY * cam.scale + cam.y;
-    if (top > 0) y = cam.y - top;
-    else if (bottom < vp.height) y = cam.y + (vp.height - bottom);
-  }
+  return {
+    x: cam.x + (clampedLeft - left),
+    y: cam.y + (clampedTop - top),
+    scale: cam.scale,
+  };
+}
 
-  return { x, y, scale: cam.scale };
+/**
+ * Clamp one axis's board-edge screen position. The board's near edge may
+ * range between flush-far and flush-near (whichever order `worldSize` vs.
+ * `vpSize` puts them in), expanded by PAN_OVERSCROLL_PX on each end.
+ */
+function clampEdge(edge: number, worldSize: number, vpSize: number): number {
+  const lo = Math.min(0, vpSize - worldSize) - PAN_OVERSCROLL_PX;
+  const hi = Math.max(0, vpSize - worldSize) + PAN_OVERSCROLL_PX;
+  return Math.min(hi, Math.max(lo, edge));
 }
 
 /** Initial camera: whole board fit, centered. */

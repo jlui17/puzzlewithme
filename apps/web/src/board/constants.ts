@@ -43,6 +43,19 @@ export const MAX_ZOOM_CELL_FILL = 0.45;
 export const WHEEL_ZOOM_RATE = 0.0015;
 
 /**
+ * Extra pan slack (screen pixels, independent of zoom) added on every side of
+ * the camera clamp in clampCamera. Without it, whenever the board fits the
+ * viewport on an axis (e.g. at min zoom) the camera is locked to a single
+ * centered position with zero pan range on that axis, so a piece rendered
+ * under a fixed corner overlay could never be dragged clear of it by panning
+ * alone. Sized to clear the widest such overlay, the PlayersPanel
+ * (.players-panel in globals.css: 240px wide, 16px right inset = 256px),
+ * rounded up for a small buffer. Guessed from that one measurement, not
+ * tuned against other viewport sizes.
+ */
+export const PAN_OVERSCROLL_PX = 260;
+
+/**
  * Render-time delay for interpolating remote motion, in ms. Remote holders relay
  * at 30 Hz (~33 ms/sample), so rendering ~100 ms in the past almost always
  * leaves the two newest samples bracketing the render time, giving jitter-free
