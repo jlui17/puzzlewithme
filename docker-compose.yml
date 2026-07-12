@@ -1,0 +1,58 @@
+# Production stack for a single VPS behind a Cloudflare Tunnel (see DEPLOY.md).
+#
+# No `ports:` anywhere on purpose: nothing listens on the host, so the only way
+# in is through the tunnel, and the only way through the tunnel is past
+# Cloudflare Access. Exposing a port here would reopen the bypass that Access
+# is meant to close.
+services:
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        # Public origin, inlined into the client bundle as the wss:// host.
+        NEXT_PUBLIC_SERVER_URL: https://${PUZZLE_HOSTNAME:?set PUZZLE_HOSTNAME in .env, e.g. puzzle.example.com}
+        # Rewrite target for /api/rooms*: the game server's compose-network
+        # address, bypassing Cloudflare so the server-side proxy fetch isn't
+        # blocked by Access (it carries no Access cookie).
+        SERVER_INTERNAL_URL: http://server:3001
+    restart: unless-stopped
+    depends_on:
+      - server
+
+  server:
+    build:
+      context: .
+      dockerfile: apps/server/Dockerfile
+    restart: unless-stopped
+    environment:
+      # Under data/ (instead of the ./uploaded-images default) so the single
+      # volume below covers both SQLite and images.
+      IMAGE_UPLOADS_DIR: ./data/uploaded-images
+      # Optional S3 image store; leave unset in .env to store images on the
+      # volume instead (main.ts falls back to local disk).
+      S3_BUCKET: ${S3_BUCKET:-}
+      AWS_REGION: ${AWS_REGION:-}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+    volumes:
+      # SQLite db + uploaded images; the server's cwd-relative ./data (see
+      # main.ts DEFAULT_SQLITE_PATH).
+      - server-data:/app/apps/server/data
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    # Remotely-managed tunnel: routing (which hostname/path goes to which
+    # service) lives in the Zero Trust dashboard, so the token is the only
+    # config needed here. --no-autoupdate because the container image is the
+    # update mechanism.
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?set TUNNEL_TOKEN in .env (Zero Trust -> Networks -> Tunnels)}
+    depends_on:
+      - web
+      - server
+
+volumes:
+  server-data:

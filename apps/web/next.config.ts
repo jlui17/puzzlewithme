@@ -1,12 +1,19 @@
 import type { NextConfig } from "next";
 
 /**
- * Origin of the game server's HTTP API. Read here (build/runtime, server side)
- * to target the reverse-proxy rewrite below, and in the client to derive the
- * WebSocket URL. One env var stays the single source of truth for "where the
- * server is" (spec: base URL from NEXT_PUBLIC_SERVER_URL).
+ * Origin of the game server's HTTP API, targeted by the reverse-proxy rewrite
+ * below. In dev one env var (NEXT_PUBLIC_SERVER_URL) names the server for both
+ * this rewrite and the client's WebSocket URL. In production the two diverge:
+ * the browser's WS needs the public origin, while this rewrite runs inside the
+ * deployment network and must hit the server directly — routing it through the
+ * public origin would put an access-gated proxy (e.g. Cloudflare Access) in
+ * front of a cookie-less server-side fetch and get it blocked. SERVER_INTERNAL_URL
+ * overrides the rewrite target for that case; unset, dev behaves as before.
  */
-const SERVER_ORIGIN = process.env.NEXT_PUBLIC_SERVER_URL ?? "http://localhost:3001";
+const SERVER_ORIGIN =
+  process.env["SERVER_INTERNAL_URL"] ??
+  process.env.NEXT_PUBLIC_SERVER_URL ??
+  "http://localhost:3001";
 
 const nextConfig: NextConfig = {
   transpilePackages: ["@puzzlewithme/shared", "@puzzlewithme/geometry"],
