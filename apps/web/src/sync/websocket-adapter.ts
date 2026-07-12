@@ -38,6 +38,32 @@ export const browserScheduler: Scheduler = {
 };
 
 /**
+ * Stable localStorage key for the persistent anonymous user id. Global (not
+ * per-room) so one browser is the same "person" across every room, which is
+ * what the session-history list keys on.
+ */
+const USER_ID_KEY = "pwm:uid";
+
+/**
+ * Load the persistent anonymous user id, minting and storing one on first ever
+ * visit (FR-22 stays intact: this identifies a browser, never links to a real
+ * account). try/catch because private mode or disabled storage throws; a null
+ * return degrades to the pre-userId flow (server falls back to resume-token
+ * identity and skips session-history membership) rather than breaking the join.
+ */
+export function loadOrCreateUserId(): string | null {
+  try {
+    const existing = localStorage.getItem(USER_ID_KEY);
+    if (existing !== null && existing !== "") return existing;
+    const id = crypto.randomUUID();
+    localStorage.setItem(USER_ID_KEY, id);
+    return id;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * TokenStorage over localStorage (FR-24). Wrapped in try/catch because a
  * browser in private mode or with storage disabled throws on access; a missing
  * token just means "first visit", which is a valid state.

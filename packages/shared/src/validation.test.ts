@@ -28,6 +28,23 @@ describe("parseClientMessage — round trips", () => {
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.message).toEqual(message);
   });
+
+  it("accepts a join carrying a persistent userId", () => {
+    const message: ClientMessage = { type: "join", roomId: "room-123", resumeToken: null, userId: "user-abc" };
+    const result = parseClientMessage(message);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.message).toEqual(message);
+  });
+
+  it("accepts a pre-userId join (userId omitted)", () => {
+    const result = parseClientMessage({ type: "join", roomId: "room-123", resumeToken: null });
+    expect(result.ok).toBe(true);
+  });
+
+  it("rejects an oversized userId", () => {
+    const result = parseClientMessage({ type: "join", roomId: "room-123", resumeToken: null, userId: "x".repeat(129) });
+    expect(result.ok).toBe(false);
+  });
 });
 
 describe("parseClientMessage — rejects malformed input", () => {

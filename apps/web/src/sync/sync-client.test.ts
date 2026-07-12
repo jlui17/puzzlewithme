@@ -33,12 +33,12 @@ interface Harness {
   events: SyncEvent[];
 }
 
-function makeHarness(initialToken: string | null = null): Harness {
+function makeHarness(initialToken: string | null = null, userId: string | null = null): Harness {
   const clock = new FakeClock();
   const scheduler = new FakeScheduler();
   const storage = new FakeTokenStorage(initialToken);
   const { factory, sockets } = fakeSocketFactory();
-  const client = new SyncClient({ roomId: "room1", socketFactory: factory, clock, scheduler, tokenStorage: storage });
+  const client = new SyncClient({ roomId: "room1", socketFactory: factory, clock, scheduler, tokenStorage: storage, userId });
   const events: SyncEvent[] = [];
   client.onEvent((e) => events.push(e));
   return { client, clock, scheduler, storage, sockets, events };
@@ -209,6 +209,26 @@ describe("SyncClient throttle (fake time)", () => {
     h.clock.advance(100);
     h.client.moveCursor(5, 5);
     expect(socket.sentOfType("cursor")).toHaveLength(2);
+  });
+});
+
+describe("SyncClient join payload", () => {
+  it("carries the persistent userId when configured", () => {
+    const h = makeHarness(null, "user-xyz");
+    h.client.connect();
+    const socket = h.sockets.at(-1)!;
+    socket.open();
+    const join = socket.sentOfType("join")[0]!;
+    expect(join).toMatchObject({ type: "join", roomId: "room1", resumeToken: null, userId: "user-xyz" });
+  });
+
+  it("sends userId: null when unavailable (old-client fallback)", () => {
+    const h = makeHarness();
+    h.client.connect();
+    const socket = h.sockets.at(-1)!;
+    socket.open();
+    const join = socket.sentOfType("join")[0]!;
+    expect(join["userId"]).toBeNull();
   });
 });
 

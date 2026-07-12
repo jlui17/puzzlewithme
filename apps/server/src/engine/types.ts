@@ -31,6 +31,8 @@ export interface SerializedGroup {
 /** A guest identity plus its private resume credential (FR-24). The token never leaves the server except to its own client. */
 export interface SerializedIdentity extends GuestIdentity {
   resumeToken: string;
+  /** Persistent client user id this identity belongs to, when the joining client sent one; absent for pre-userId clients. */
+  userId?: string;
 }
 
 /**

@@ -42,6 +42,8 @@ interface Hold {
 
 interface IdentityRecord extends GuestIdentity {
   resumeToken: string;
+  /** The persistent client user id that owns this per-room identity, when supplied on join. */
+  userId?: string;
 }
 
 export interface RoomEngineOptions {
@@ -77,6 +79,8 @@ export class RoomEngine {
   /** Insertion order is join order; snapshot/serialize iterate it, keeping output stable across a persistence round-trip (NFR-5). */
   private readonly identities = new Map<string, IdentityRecord>();
   private readonly tokenToGuest = new Map<string, string>();
+  /** Persistent user id -> guest id, so a client resuming by userId (token lost, or a first join from another tab) re-finds its identity within this room. */
+  private readonly userIdToGuest = new Map<string, string>();
   private readonly connected = new Set<string>();
   private readonly credited = new Set<number>();
   private activeMs: number;
@@ -125,18 +129,22 @@ export class RoomEngine {
       for (const identity of persisted.identities) {
         this.identities.set(identity.id, { ...identity });
         this.tokenToGuest.set(identity.resumeToken, identity.id);
+        if (identity.userId !== undefined) this.userIdToGuest.set(identity.userId, identity.id);
       }
     }
   }
 
   /**
-   * Join or resume (§7.2, FR-24). A valid resume token re-associates the
-   * prior identity (name and score intact); anything else mints a fresh
-   * identity. Completed rooms accept joins — they're viewable forever
-   * (FR-25) — but no longer accrue solving time.
+   * Join or resume (§7.2, FR-24). Re-association tries the resume token first
+   * (this browser's per-room credential), then the persistent userId (same
+   * person whose token was lost, or a first join from another tab sharing the
+   * userId); anything else mints a fresh identity. A minted identity records
+   * its userId so later joins by that userId resume it. Completed rooms accept
+   * joins — they're viewable forever (FR-25) — but no longer accrue solving time.
    */
-  join(resumeToken?: string | null): JoinResult {
-    const resumedId = resumeToken != null ? this.tokenToGuest.get(resumeToken) : undefined;
+  join(resumeToken?: string | null, userId?: string | null): JoinResult {
+    let resumedId = resumeToken != null ? this.tokenToGuest.get(resumeToken) : undefined;
+    if (resumedId === undefined && userId != null) resumedId = this.userIdToGuest.get(userId);
     const existing = resumedId !== undefined ? this.identities.get(resumedId) : undefined;
 
     // The cap counts connected players (NFR-3); a second tab resuming an
@@ -162,9 +170,11 @@ export class RoomEngine {
         color: assignCursorColor(usedColors, this.identities.size),
         placedCount: 0,
         resumeToken: randomUUID(),
+        ...(userId != null ? { userId } : {}),
       };
       this.identities.set(record.id, record);
       this.tokenToGuest.set(record.resumeToken, record.id);
+      if (userId != null) this.userIdToGuest.set(userId, record.id);
     }
 
     this.connected.add(record.id);

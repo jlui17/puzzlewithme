@@ -27,6 +27,11 @@ const MAX_ROOM_ID_LENGTH = 128;
 // who never received a real token.
 const MAX_RESUME_TOKEN_LENGTH = 256;
 
+// Persistent anonymous user id: client-generated (crypto.randomUUID), stored in
+// localStorage, and stable across sessions/rooms. A UUID is 36 chars; 128 caps
+// a malicious oversized value while leaving room for a longer id scheme later.
+const MAX_USER_ID_LENGTH = 128;
+
 // Group ids are derived from grid coordinates (e.g. "3-14") or server-issued
 // merge ids; 64 chars is generous for either while still capping input size.
 const MAX_GROUP_ID_LENGTH = 64;
@@ -47,6 +52,11 @@ export const joinMessageSchema = z.object({
   // null on first visit; a browser resuming a prior identity sends back the
   // token it was issued (FR-24).
   resumeToken: z.string().max(MAX_RESUME_TOKEN_LENGTH).nullable(),
+  // Optional so pre-userId clients still join unchanged (falls back to
+  // resume-token-only identity). When present, re-associates the same person to
+  // their per-room identity even if the resume token was lost, and keys the
+  // session-history membership record.
+  userId: z.string().min(1).max(MAX_USER_ID_LENGTH).nullish(),
 });
 
 export const renameMessageSchema = z.object({

@@ -59,6 +59,8 @@ export interface SyncClientConfig {
   clock: Clock;
   scheduler: Scheduler;
   tokenStorage: TokenStorage;
+  /** Persistent anonymous user id sent on join, or null when unavailable (old flow: resume-token-only identity). */
+  userId?: string | null;
   /** Optional jitter source for reconnect backoff; see BackoffConfig.random. */
   random?: () => number;
 }
@@ -130,9 +132,16 @@ export class SyncClient {
 
   private handleOpen(): void {
     // Join carries the stored resume token so the same browser resumes its
-    // identity (FR-24); null on first ever visit. Sent directly (not gated by
-    // isConnected) because we're not "connected" until the snapshot lands.
-    this.send({ type: "join", roomId: this.config.roomId, resumeToken: this.config.tokenStorage.load() });
+    // identity (FR-24); null on first ever visit. userId is the persistent
+    // cross-session id (undefined omits it, keeping old-client behavior). Sent
+    // directly (not gated by isConnected) because we're not "connected" until
+    // the snapshot lands.
+    this.send({
+      type: "join",
+      roomId: this.config.roomId,
+      resumeToken: this.config.tokenStorage.load(),
+      userId: this.config.userId ?? null,
+    });
   }
 
   private handleClose(): void {

@@ -81,7 +81,7 @@ export function attachWebSocketServer(server: HttpServer, registry: RoomRegistry
           reject("invalid_message", "first message must be a join");
           return;
         }
-        const outcome = await registry.join(conn, message.roomId, message.resumeToken);
+        const outcome = await registry.join(conn, message.roomId, message.resumeToken, message.userId ?? null);
         if (!outcome.ok) {
           if (outcome.reason === "room_full") conn.send({ type: "room_full" });
           else conn.send({ type: "error", code: "room_not_found", message: "room_not_found" });

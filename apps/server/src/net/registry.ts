@@ -93,12 +93,13 @@ export class RoomRegistry {
     conn: RoomConnection,
     roomId: string,
     resumeToken: string | null,
+    userId: string | null = null,
   ): Promise<JoinOutcome> {
     if (this.closing) return { ok: false, reason: "room_not_found" };
     const room = await this.getOrLoad(roomId);
     if (room === null) return { ok: false, reason: "room_not_found" };
 
-    const result = room.engine.join(resumeToken);
+    const result = room.engine.join(resumeToken, userId);
     if (!result.ok) return { ok: false, reason: "room_full" };
 
     const playerId = result.identity.id;

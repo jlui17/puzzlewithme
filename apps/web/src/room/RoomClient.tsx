@@ -8,6 +8,7 @@ import {
   browserScheduler,
   createBrowserSocketFactory,
   createLocalStorageTokenStorage,
+  loadOrCreateUserId,
   SyncClient,
   type BoardState,
   type ConnectionStatus,
@@ -142,6 +143,11 @@ function RoomLive({ settings }: { settings: RoomSettings }) {
   );
   const [statsDismissed, setStatsDismissed] = useState(false);
 
+  // Resolved once on the client (localStorage is unavailable during SSR, where
+  // loadOrCreateUserId returns null); not rendered into HTML, so no hydration
+  // mismatch. This is the same browser's stable id across rooms/sessions.
+  const userId = useMemo(() => loadOrCreateUserId(), []);
+
   // One SyncClient per room mount. Browser adapters only touch globals when
   // called (connect), so constructing here (client component) is safe.
   const sync = useMemo(
@@ -152,8 +158,9 @@ function RoomLive({ settings }: { settings: RoomSettings }) {
         clock: browserClock,
         scheduler: browserScheduler,
         tokenStorage: createLocalStorageTokenStorage(`pwm:resume:${settings.roomId}`),
+        userId,
       }),
-    [settings.roomId],
+    [settings.roomId, userId],
   );
 
   const [panel, setPanel] = useState<Panel>(() => derivePanel(sync.getState(), totalPieces));

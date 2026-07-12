@@ -117,11 +117,12 @@ async function makeRoom(roomId: string): Promise<void> {
 async function join(
   roomId: string,
   resumeToken: string | null = null,
+  userId: string | null = null,
 ): Promise<{ client: TestClient; playerId: string; name: string; resumeToken: string; snapshot: ServerMessage }> {
   const client = new TestClient(port);
   clients.push(client);
   await client.opened();
-  client.send({ type: "join", roomId, resumeToken });
+  client.send({ type: "join", roomId, resumeToken, userId });
   const joined = await client.waitForType("joined");
   const snapshot = await client.waitForType("snapshot");
   if (joined.type !== "joined") throw new Error("unreachable");
@@ -231,6 +232,26 @@ describe("websocket net layer", () => {
     if (fresh.snapshot.type !== "snapshot") throw new Error("unreachable");
     const meFresh = fresh.snapshot.scoreboard.players.find((p) => p.guestId === fresh.playerId);
     expect(meFresh?.placedCount).toBe(0);
+  });
+
+  it("resumes the prior identity by persistent userId when no resume token is sent", async () => {
+    // Keeper keeps the room resident so the resume reads live in-memory identity.
+    await join(ROOM);
+    const a = await join(ROOM, null, "user-A");
+
+    a.client.send({ type: "grab", groupId: "0-0" });
+    await a.client.waitForType("grab_result");
+    a.client.send({ type: "drop", groupId: "0-0", x: 0, y: 0 });
+    await a.client.waitForType("snap_result");
+    a.client.close();
+    await a.client.closed();
+
+    // Same userId, no resume token: still maps to the same player and score.
+    const resumed = await join(ROOM, null, "user-A");
+    expect(resumed.playerId).toBe(a.playerId);
+    if (resumed.snapshot.type !== "snapshot") throw new Error("unreachable");
+    const me = resumed.snapshot.scoreboard.players.find((p) => p.guestId === a.playerId);
+    expect(me?.placedCount).toBe(1);
   });
 
   it("converges a live-derived board to a fresh snapshot (NFR-6)", async () => {

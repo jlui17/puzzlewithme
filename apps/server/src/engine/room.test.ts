@@ -134,6 +134,61 @@ describe("resume (FR-24)", () => {
   });
 });
 
+describe("resume by persistent userId", () => {
+  it("re-associates the prior identity by userId even when the resume token is absent", () => {
+    const { engine } = makeEngine();
+    const first = engine.join(null, "user-A");
+    expect(first.ok).toBe(true);
+    if (!first.ok) throw new Error("unreachable");
+    engine.rename(first.identity.id, "Alice");
+    dropOk(engine, first.identity.id, "0-0", -160, -60);
+    dropOk(engine, first.identity.id, "0-1", -56, -57); // credits 2
+    engine.leave(first.identity.id);
+
+    // No token this time (e.g. per-room resume token cleared), only the userId.
+    const back = engine.join(null, "user-A");
+    expect(back.ok).toBe(true);
+    if (!back.ok) throw new Error("unreachable");
+    expect(back.resumed).toBe(true);
+    expect(back.identity).toEqual({ ...first.identity, name: "Alice", placedCount: 2 });
+  });
+
+  it("prefers the resume token over the userId when both resolve", () => {
+    const { engine } = makeEngine();
+    const a = engine.join(null, "user-A");
+    const b = engine.join(null, "user-B");
+    if (!a.ok || !b.ok) throw new Error("unreachable");
+    // A's token with B's userId: the token wins (this browser's exact identity).
+    const back = engine.join(a.resumeToken, "user-B");
+    if (!back.ok) throw new Error("unreachable");
+    expect(back.identity.id).toBe(a.identity.id);
+  });
+
+  it("gives a distinct userId a fresh identity", () => {
+    const { engine } = makeEngine();
+    const a = engine.join(null, "user-A");
+    const b = engine.join(null, "user-B");
+    if (!a.ok || !b.ok) throw new Error("unreachable");
+    expect(b.resumed).toBe(false);
+    expect(b.identity.id).not.toBe(a.identity.id);
+  });
+
+  it("round-trips the userId association through serialize -> construct", () => {
+    const { engine, clock } = makeEngine();
+    const a = engine.join(null, "user-A");
+    if (!a.ok) throw new Error("unreachable");
+    engine.rename(a.identity.id, "Alice");
+    engine.leave(a.identity.id);
+
+    const persisted = engine.serialize();
+    const revived = new RoomEngine({ settings: persisted.settings, now: clock.now, persisted });
+    const back = revived.join(null, "user-A");
+    if (!back.ok) throw new Error("unreachable");
+    expect(back.resumed).toBe(true);
+    expect(back.identity).toMatchObject({ id: a.identity.id, name: "Alice" });
+  });
+});
+
 describe("grab (FR-9, FR-12)", () => {
   it("grants exactly one of two conflicting grabs; the loser learns the holder's name", () => {
     const { engine } = makeEngine();
