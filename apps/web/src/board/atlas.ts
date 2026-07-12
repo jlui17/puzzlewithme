@@ -57,6 +57,30 @@ export interface AtlasResult {
   atlases: Texture[];
 }
 
+/**
+ * Intersect a tile's world box (cell plus overhang on all sides) with the
+ * frame (= the image's world extent), in world units. The overhang region past
+ * the frame edge holds no image anyway (a border piece's flat side), so the
+ * clamped draw is visually identical to the spec's proportional clipping —
+ * but it never hands drawImage an out-of-bounds source rect, which iOS Safari
+ * refuses to draw at all instead of clipping.
+ */
+export function clampTileToFrame(
+  cellX: number,
+  cellY: number,
+  overhang: number,
+  tileWorld: number,
+  frameW: number,
+  frameH: number,
+): { x0: number; y0: number; x1: number; y1: number } {
+  return {
+    x0: Math.max(0, cellX - overhang),
+    y0: Math.max(0, cellY - overhang),
+    x1: Math.min(frameW, cellX - overhang + tileWorld),
+    y1: Math.min(frameH, cellY - overhang + tileWorld),
+  };
+}
+
 export function buildAtlases(
   puzzle: Puzzle,
   image: CanvasImageSource,
@@ -107,24 +131,40 @@ export function buildAtlases(
       // Clip to the piece outline (local coords are relative to the cell origin).
       const path = new Path2D(pieceSvgPath(piece, { local: true }));
 
-      // Draw the image region under this tile. Source rect maps the tile's world
-      // box to image pixels; drawImage clips a partly-off-image source (border
-      // overhang) proportionally, keeping alignment.
-      const srcX = (cell.x - OVERHANG) * imgScaleX;
-      const srcY = (cell.y - OVERHANG) * imgScaleY;
-      const srcW = TILE_WORLD * imgScaleX;
-      const srcH = TILE_WORLD * imgScaleY;
+      // Draw the image region under this tile, clipping the source rect to the
+      // image OURSELVES. The spec says drawImage clips a partly-off-image
+      // source proportionally, and desktop browsers do — but iOS Safari
+      // silently draws NOTHING for an out-of-bounds source rect, which blanked
+      // every border piece's tile (their overhang margin pokes past the photo
+      // edge) and made edge pieces invisible on iPhones.
+      const vis = clampTileToFrame(cell.x, cell.y, OVERHANG, TILE_WORLD, frameW, frameH);
+      const srcX = vis.x0 * imgScaleX;
+      const srcY = vis.y0 * imgScaleY;
+      const srcW = (vis.x1 - vis.x0) * imgScaleX;
+      const srcH = (vis.y1 - vis.y0) * imgScaleY;
 
       // Stamp the clipped piece at a pixel offset. Offsetting the whole tile
       // space moves clip and image together, so a shifted stamp is the same piece
-      // translated by (dx, dy) atlas texels.
+      // translated by (dx, dy) atlas texels. Draw coordinates are cell-local
+      // (the translate(OVERHANG, OVERHANG) puts the cell origin at 0,0), so the
+      // clamped world box maps to dest by subtracting the cell origin.
       const stamp = (dx: number, dy: number): void => {
         ctx.save();
         ctx.translate(slotX + dx, slotY + dy);
         ctx.scale(pixelScale, pixelScale);
         ctx.translate(OVERHANG, OVERHANG);
         ctx.clip(path);
-        ctx.drawImage(image, srcX, srcY, srcW, srcH, -OVERHANG, -OVERHANG, TILE_WORLD, TILE_WORLD);
+        ctx.drawImage(
+          image,
+          srcX,
+          srcY,
+          srcW,
+          srcH,
+          vis.x0 - cell.x,
+          vis.y0 - cell.y,
+          vis.x1 - vis.x0,
+          vis.y1 - vis.y0,
+        );
         ctx.restore();
       };
 
