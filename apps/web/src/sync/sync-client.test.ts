@@ -207,11 +207,11 @@ describe("SyncClient cursor ping (fixed periodic tick)", () => {
     expect(socket.sentOfType("cursor")).toHaveLength(0);
 
     // The tick fires => one send with the newest position, older ones dropped.
-    h.scheduler.runNext();
+    h.scheduler.runByDelay(100);
     expect(socket.sentOfType("cursor")).toEqual([{ type: "cursor", x: 9, y: 9 }]);
 
     h.client.moveCursor(20, 30);
-    h.scheduler.runNext();
+    h.scheduler.runByDelay(100);
     expect(socket.sentOfType("cursor")).toEqual([
       { type: "cursor", x: 9, y: 9 },
       { type: "cursor", x: 20, y: 30 },
@@ -223,27 +223,27 @@ describe("SyncClient cursor ping (fixed periodic tick)", () => {
     const socket = connectAndSync(h);
 
     h.client.moveCursor(5, 5);
-    h.scheduler.runNext();
+    h.scheduler.runByDelay(100);
     expect(socket.sentOfType("cursor")).toHaveLength(1);
 
     // Idle pointer: further ticks send nothing, including a same-position move.
-    h.scheduler.runNext();
+    h.scheduler.runByDelay(100);
     h.client.moveCursor(5, 5);
-    h.scheduler.runNext();
+    h.scheduler.runByDelay(100);
     expect(socket.sentOfType("cursor")).toHaveLength(1);
 
     h.client.moveCursor(6, 5);
-    h.scheduler.runNext();
+    h.scheduler.runByDelay(100);
     expect(socket.sentOfType("cursor")).toHaveLength(2);
   });
 
   it("schedules ticks at the fixed cursor interval", () => {
     const h = makeHarness();
     connectAndSync(h);
-    // The timer pending after sync is the cursor tick; 100 ms = 10 Hz.
-    expect(h.scheduler.pending).toBe(1);
-    expect(h.scheduler.lastDelay()).toBe(100);
-    h.scheduler.runNext();
+    // Two timers arm on sync: the cursor tick (100 ms = 10 Hz) and the
+    // heartbeat watchdog (10 s).
+    expect(h.scheduler.pending).toBe(2);
+    h.scheduler.runByDelay(100);
     expect(h.scheduler.lastDelay()).toBe(100); // rescheduled at the same rate
   });
 
@@ -251,11 +251,12 @@ describe("SyncClient cursor ping (fixed periodic tick)", () => {
     const h = makeHarness();
     const socket1 = connectAndSync(h);
     h.client.moveCursor(5, 5);
-    h.scheduler.runNext();
+    h.scheduler.runByDelay(100);
     expect(socket1.sentOfType("cursor")).toHaveLength(1);
 
     socket1.drop();
-    // Only the reconnect timer remains: the cursor tick stopped with the socket.
+    // Only the reconnect timer remains: the cursor tick and heartbeat stopped
+    // with the socket.
     expect(h.scheduler.pending).toBe(1);
     h.scheduler.runNext();
     const socket2 = h.sockets.at(-1)!;
@@ -265,7 +266,7 @@ describe("SyncClient cursor ping (fixed periodic tick)", () => {
 
     // Same position as before the drop, but a fresh connection: resent anyway
     // so the new session's peers see it.
-    h.scheduler.runNext();
+    h.scheduler.runByDelay(100);
     expect(socket2.sentOfType("cursor")).toEqual([{ type: "cursor", x: 5, y: 5 }]);
   });
 
@@ -352,6 +353,52 @@ describe("SyncClient reconnect", () => {
     const dropsBefore = socket2.sentOfType("drop").length;
     h.client.endDrag(1, 1);
     expect(socket2.sentOfType("drop")).toHaveLength(dropsBefore);
+  });
+
+  it("detects a silently dead socket via heartbeat and reconnects to resync", () => {
+    // The reported bug: a mobile socket the OS suspended stops delivering
+    // frames but never fires onclose, so the client sat "connected" on a dead
+    // socket forever, missing every broadcast (other players' placements) while
+    // its own optimistic edits still showed. Without a heartbeat there is no
+    // timer to fire here, so the client never notices and never resyncs.
+    const h = makeHarness();
+    const socket1 = connectAndSync(h);
+    expect(h.client.getState().connection).toBe("connected");
+    // A snapshot arms the heartbeat watchdog (plus the cursor tick).
+    expect(h.scheduler.pending).toBe(2);
+
+    // Socket goes silent (no frames, no onclose). Enough time passes to exceed
+    // the liveness window (well past the ~25s timeout).
+    h.clock.advance(60_000);
+    h.scheduler.runByDelay(10_000); // heartbeat tick: silence detected -> tear down socket
+
+    expect(h.client.getState().connection).toBe("reconnecting");
+    h.scheduler.runNext(); // backoff fires -> fresh socket
+    const socket2 = h.sockets.at(-1)!;
+    expect(socket2).not.toBe(socket1);
+    socket2.open();
+    // Rejoins with the stored token; the server answers with a fresh snapshot,
+    // recovering every event missed while the old socket was dead.
+    expect(socket2.sentOfType("join")[0]).toMatchObject({ resumeToken: "tok-1" });
+  });
+
+  it("keeps a live socket alive by pinging and re-arming on each pong", () => {
+    const h = makeHarness();
+    const socket = connectAndSync(h);
+
+    // One heartbeat cycle within the liveness window: sends a ping, stays up.
+    h.clock.advance(1_000);
+    h.scheduler.runByDelay(10_000);
+    expect(socket.sentOfType("ping")).toHaveLength(1);
+    expect(h.client.getState().connection).toBe("connected");
+
+    // Server pong refreshes liveness; the next cycle pings again, never trips.
+    socket.receive({ type: "pong" });
+    h.clock.advance(1_000);
+    h.scheduler.runByDelay(10_000);
+    expect(socket.sentOfType("ping")).toHaveLength(2);
+    expect(h.client.getState().connection).toBe("connected");
+    expect(h.scheduler.pending).toBe(2); // watchdog re-armed, cursor tick still pending
   });
 
   it("stops reconnecting and closes on room_full", () => {

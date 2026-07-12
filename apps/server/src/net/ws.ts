@@ -15,6 +15,25 @@ export const WS_PATH = "/ws";
  */
 const MAX_INVALID_MESSAGES = 5;
 
+/**
+ * WebSocket keepalive cadence. The `ws` library never pings on its own, so a
+ * socket whose peer vanished without a close frame (a mobile client the OS
+ * suspended and killed) stays `readyState === OPEN` forever, and `broadcast`
+ * fans state into it while the registry never learns the player left. Each
+ * cycle terminates any socket that missed the previous cycle's ping, so a dead
+ * socket is reaped within two cycles (~60s at the default). 30s is the common
+ * keepalive interval: frequent enough that a zombie is gone well inside a
+ * human-noticeable session, cheap enough that a full room's ping traffic is
+ * negligible. Guessed against that reasoning, not measured; injectable so tests
+ * drive it fast.
+ */
+const DEFAULT_HEARTBEAT_INTERVAL_MS = 30_000;
+
+export interface WebSocketServerOptions {
+  /** Keepalive cadence (§7.4 dead-socket reaping). Defaults to DEFAULT_HEARTBEAT_INTERVAL_MS; tests pass a small value. */
+  heartbeatIntervalMs?: number;
+}
+
 function rawDataToString(data: RawData): string {
   if (typeof data === "string") return data;
   if (Array.isArray(data)) return Buffer.concat(data).toString("utf8");
@@ -27,8 +46,32 @@ function rawDataToString(data: RawData): string {
  * manual `upgrade` handler so it coexists with the HTTP request listener on one
  * port: only `/ws` upgrades succeed; anything else has its socket destroyed.
  */
-export function attachWebSocketServer(server: HttpServer, registry: RoomRegistry): WebSocketServer {
+export function attachWebSocketServer(
+  server: HttpServer,
+  registry: RoomRegistry,
+  options: WebSocketServerOptions = {},
+): WebSocketServer {
   const wss = new WebSocketServer({ noServer: true });
+
+  // Liveness by protocol ping/pong: a socket is "alive" the moment it pongs
+  // (browsers pong automatically), and the sweep below terminates any that
+  // didn't pong since the previous sweep. WeakSet keys on the socket so a
+  // closed connection drops out without bookkeeping.
+  const alive = new WeakSet<WebSocket>();
+  const heartbeatIntervalMs = options.heartbeatIntervalMs ?? DEFAULT_HEARTBEAT_INTERVAL_MS;
+  const heartbeat = setInterval(() => {
+    for (const ws of wss.clients) {
+      if (!alive.has(ws)) {
+        ws.terminate();
+        continue;
+      }
+      alive.delete(ws);
+      ws.ping();
+    }
+  }, heartbeatIntervalMs);
+  // Don't let the keepalive sweep hold the process (or a test runner) open.
+  heartbeat.unref?.();
+  wss.on("close", () => clearInterval(heartbeat));
 
   server.on("upgrade", (req, socket, head) => {
     const url = new URL(req.url ?? "/", "http://internal.invalid");
@@ -42,6 +85,9 @@ export function attachWebSocketServer(server: HttpServer, registry: RoomRegistry
   });
 
   wss.on("connection", (ws: WebSocket) => {
+    alive.add(ws);
+    ws.on("pong", () => alive.add(ws));
+
     const conn: RoomConnection = {
       send: (message) => {
         if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(message));
@@ -75,6 +121,13 @@ export function attachWebSocketServer(server: HttpServer, registry: RoomRegistry
         return;
       }
       const message = parsed.message;
+
+      // Liveness probe, valid in any state and outside the join handshake: its
+      // reply is what tells a client its receive path still works (§7.4).
+      if (message.type === "ping") {
+        conn.send({ type: "pong" });
+        return;
+      }
 
       if (state === "awaiting_join") {
         if (message.type !== "join") {

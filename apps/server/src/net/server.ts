@@ -10,6 +10,8 @@ export interface GameServerOptions {
   imageStore: ImageStore;
   /** Registry tuning (clock, checkpoint/sweep intervals, snap tolerance) forwarded verbatim; tests inject these for determinism. */
   registry?: Omit<RoomRegistryOptions, "store">;
+  /** WS keepalive cadence (§7.4 dead-socket reaping); defaulted in the WS layer, injected small by tests. */
+  heartbeatIntervalMs?: number;
 }
 
 export interface GameServer {
@@ -28,7 +30,9 @@ export function createGameServer(options: GameServerOptions): GameServer {
   const registry = new RoomRegistry({ store: options.roomStore, ...options.registry });
   const handler = createHttpHandler({ roomStore: options.roomStore, imageStore: options.imageStore });
   const server = createHttpServer(handler);
-  const wss = attachWebSocketServer(server, registry);
+  const wss = attachWebSocketServer(server, registry, {
+    heartbeatIntervalMs: options.heartbeatIntervalMs,
+  });
 
   const close = async (): Promise<void> => {
     // Flush + clear rooms before dropping sockets, so the terminate below can't

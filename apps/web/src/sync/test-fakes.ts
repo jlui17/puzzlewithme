@@ -47,6 +47,21 @@ export class FakeScheduler implements Scheduler {
     timer.callback();
   }
 
+  /**
+   * Fire the oldest pending timer scheduled with exactly this delay. Needed
+   * once the client arms more than one recurring timer (cursor tick + heartbeat
+   * watchdog): the delay identifies which one a test means to advance.
+   */
+  runByDelay(delayMs: number): void {
+    for (const [id, timer] of this.timers) {
+      if (timer.delayMs !== delayMs) continue;
+      this.timers.delete(id);
+      timer.callback();
+      return;
+    }
+    throw new Error(`no pending timer with delay ${delayMs}`);
+  }
+
   lastDelay(): number | undefined {
     return [...this.timers.values()].at(-1)?.delayMs;
   }

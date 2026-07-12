@@ -89,6 +89,18 @@ export const cursorMessageSchema = z.object({
   y: finiteNumber,
 });
 
+/**
+ * Client liveness probe (§7.4). The client sends this on its heartbeat interval
+ * and the server answers with a `pong`; the reply is what proves the client's
+ * *receive* path is alive. This exists because a browser WebSocket that dies
+ * silently (mobile Safari suspending a backgrounded tab) never fires `onclose`,
+ * so without an application-level round-trip the client can't tell a live-but-
+ * quiet socket from a dead one, and would sit forever missing broadcasts.
+ */
+export const pingMessageSchema = z.object({
+  type: z.literal("ping"),
+});
+
 export const clientMessageSchema = z.discriminatedUnion("type", [
   joinMessageSchema,
   renameMessageSchema,
@@ -96,6 +108,7 @@ export const clientMessageSchema = z.discriminatedUnion("type", [
   moveMessageSchema,
   dropMessageSchema,
   cursorMessageSchema,
+  pingMessageSchema,
 ]);
 
 export type JoinMessage = z.infer<typeof joinMessageSchema>;
@@ -104,5 +117,6 @@ export type GrabMessage = z.infer<typeof grabMessageSchema>;
 export type MoveMessage = z.infer<typeof moveMessageSchema>;
 export type DropMessage = z.infer<typeof dropMessageSchema>;
 export type CursorMessage = z.infer<typeof cursorMessageSchema>;
+export type PingMessage = z.infer<typeof pingMessageSchema>;
 
 export type ClientMessage = z.infer<typeof clientMessageSchema>;

@@ -9,6 +9,7 @@ const validMessages: Record<ClientMessage["type"], ClientMessage> = {
   move: { type: "move", groupId: "grp-1", x: 12.5, y: -3.25 },
   drop: { type: "drop", groupId: "grp-1", x: 0, y: 0 },
   cursor: { type: "cursor", x: 100, y: 200 },
+  ping: { type: "ping" },
 };
 
 describe("parseClientMessage — round trips", () => {

@@ -159,6 +159,11 @@ export interface ErrorMessage {
   message: string;
 }
 
+/** Reply to a client `ping` (§7.4). Carries no payload; its arrival is the signal — it proves the client's receive path is still alive so its heartbeat watchdog stays fed. */
+export interface PongMessage {
+  type: "pong";
+}
+
 export type ServerMessage =
   | JoinedMessage
   | SnapshotMessage
@@ -171,4 +176,5 @@ export type ServerMessage =
   | PresenceMessage
   | CompletionMessage
   | RoomFullMessage
-  | ErrorMessage;
+  | ErrorMessage
+  | PongMessage;

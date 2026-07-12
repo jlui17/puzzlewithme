@@ -21,6 +21,7 @@ export type {
   GrabMessage,
   JoinMessage,
   MoveMessage,
+  PingMessage,
   RenameMessage,
 } from "./client-messages.js";
 export {
@@ -43,6 +44,7 @@ export type {
   GroupMovedMessage,
   GroupReleasedMessage,
   JoinedMessage,
+  PongMessage,
   PresenceMessage,
   RoomFullMessage,
   ScoreCredit,

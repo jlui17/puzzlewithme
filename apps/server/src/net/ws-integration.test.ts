@@ -183,6 +183,13 @@ describe("websocket net layer", () => {
     });
   });
 
+  it("answers a client ping with a pong", async () => {
+    const a = await join(ROOM);
+    a.client.send({ type: "ping" });
+    const pong = await a.client.waitForType("pong");
+    expect(pong).toEqual({ type: "pong" });
+  });
+
   it("reports held_by with the holder's name on a conflicting grab", async () => {
     const a = await join(ROOM);
     const b = await join(ROOM);
@@ -392,6 +399,46 @@ describe("websocket net layer", () => {
       expect(released).toMatchObject({ type: "released", groupId: "0-0" });
     } finally {
       await idleGame.close();
+    }
+  });
+
+  it("reaps a socket that stops answering keepalive pings, sparing a live one", async () => {
+    // Own server with a tiny heartbeat so the reaper fires in ~2 cycles without
+    // sleeping; the beforeEach server's default cadence never fires mid-test.
+    const hbStore = new InMemoryRoomStore();
+    await hbStore.create({ roomId: "hb-room", ...BASE_SETTINGS });
+    const hbGame = createGameServer({
+      roomStore: hbStore,
+      imageStore: stubImageStore,
+      registry: { checkpointIntervalMs: 3_600_000, sweepIntervalMs: 3_600_000 },
+      // 50ms: two cycles (~100ms) reap the zombie well under the test timeout,
+      // while a localhost pong round-trip (<1ms) keeps the live client marked.
+      heartbeatIntervalMs: 50,
+    });
+    await new Promise<void>((resolve) => hbGame.server.listen(0, resolve));
+    const hbPort = (hbGame.server.address() as AddressInfo).port;
+
+    const open = (ws: WebSocket): Promise<void> =>
+      new Promise((resolve, reject) => {
+        ws.once("open", () => resolve());
+        ws.once("error", reject);
+      });
+
+    try {
+      // A well-behaved client auto-pongs the server's keepalive.
+      const live = new WebSocket(`ws://127.0.0.1:${hbPort}/ws`);
+      await open(live);
+      // A zombie: connected but never answers a ping (mobile socket the OS froze).
+      const zombie = new WebSocket(`ws://127.0.0.1:${hbPort}/ws`, { autoPong: false });
+      await open(zombie);
+
+      const closeCode = await new Promise<number>((resolve) => zombie.once("close", (code) => resolve(code)));
+      // terminate() aborts the socket, surfacing as an abnormal (1006) close.
+      expect(closeCode).toBe(1006);
+      expect(live.readyState).toBe(WebSocket.OPEN);
+      live.close();
+    } finally {
+      await hbGame.close();
     }
   });
 

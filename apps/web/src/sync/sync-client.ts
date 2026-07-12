@@ -54,6 +54,26 @@ const BACKOFF_BASE_MS = 500;
 const BACKOFF_FACTOR = 2;
 const BACKOFF_CAP_MS = 15_000;
 
+/**
+ * Heartbeat cadence (§7.4). Every interval the client sends a `ping` and checks
+ * how long it's been since it last heard *anything* from the server. A browser
+ * WebSocket the OS suspended (mobile Safari backgrounding a tab) can die
+ * without ever firing `onclose`, so the client would otherwise sit "connected"
+ * on a dead socket, missing every broadcast while its own optimistic edits
+ * still show, exactly the asymmetric fan-out this heartbeat exists to break.
+ * 10s pings keep a live socket's inbound stream fresh at negligible cost.
+ */
+const HEARTBEAT_INTERVAL_MS = 10_000;
+
+/**
+ * Silence past this window means the socket is dead: tear it down and
+ * reconnect (which resyncs via the join snapshot). Set to ~2.5 heartbeat
+ * intervals so two dropped pongs in a row don't false-trip a reconnect on a
+ * merely-jittery link, while a genuinely dead socket is caught within ~30s.
+ * Guessed from that "tolerate a couple of misses" reasoning, not measured.
+ */
+const LIVENESS_TIMEOUT_MS = 25_000;
+
 interface DragState {
   groupId: string;
   originalPosition: Vec2;
@@ -84,6 +104,9 @@ export class SyncClient {
   private reconnectAttempt = 0;
   private reconnectTimer: TimerHandle | null = null;
   private closedByUser = false;
+  private heartbeatTimer: TimerHandle | null = null;
+  /** Clock time of the last frame received from the server; the heartbeat measures silence against it. */
+  private lastInboundAt = 0;
 
   /** Latest known local cursor position; relayed by cursorTick, not on arrival. */
   private pendingCursor: Vec2 | null = null;
@@ -122,6 +145,7 @@ export class SyncClient {
   /** Stop for good: cancel any pending reconnect and close the socket. */
   close(): void {
     this.closedByUser = true;
+    this.stopHeartbeat();
     if (this.reconnectTimer !== null) {
       this.config.scheduler.clearTimer(this.reconnectTimer);
       this.reconnectTimer = null;
@@ -198,6 +222,7 @@ export class SyncClient {
     // "connected" snapshot restarts it (see the "snapshot" case below).
     this.stopCursorTick();
     this.socket = null;
+    this.stopHeartbeat();
     if (this.closedByUser) {
       // room_full is terminal too, but keep that status so the UI can show why.
       if (this.store.getState().connection !== "room_full") this.store.setConnection("closed");
@@ -216,6 +241,47 @@ export class SyncClient {
     this.reconnectTimer = this.config.scheduler.setTimer(() => this.openSocket(), delay);
   }
 
+  /**
+   * (Re)start the liveness watchdog once a snapshot confirms we're connected.
+   * Idempotent: clears any prior timer so a reconnect never leaves two running.
+   */
+  private startHeartbeat(): void {
+    this.stopHeartbeat();
+    this.lastInboundAt = this.config.clock.now();
+    this.armHeartbeat();
+  }
+
+  private armHeartbeat(): void {
+    this.heartbeatTimer = this.config.scheduler.setTimer(
+      () => this.heartbeatTick(),
+      HEARTBEAT_INTERVAL_MS,
+    );
+  }
+
+  private stopHeartbeat(): void {
+    if (this.heartbeatTimer !== null) {
+      this.config.scheduler.clearTimer(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
+  }
+
+  /**
+   * One heartbeat cycle: if the server has gone silent past the liveness
+   * window, the socket is dead even though `onclose` never fired, so close it
+   * (routing through handleClose's reconnect + resync). Otherwise send a ping
+   * to solicit a pong and re-arm.
+   */
+  private heartbeatTick(): void {
+    this.heartbeatTimer = null;
+    if (this.socket === null) return;
+    if (this.config.clock.now() - this.lastInboundAt >= LIVENESS_TIMEOUT_MS) {
+      this.socket.close();
+      return;
+    }
+    this.send({ type: "ping" });
+    this.armHeartbeat();
+  }
+
   private handleMessage(data: string): void {
     let msg: ServerMessage;
     try {
@@ -223,6 +289,10 @@ export class SyncClient {
     } catch {
       return;
     }
+
+    // Any well-formed frame proves the receive path is alive; the heartbeat
+    // watchdog measures silence from here.
+    this.lastInboundAt = this.config.clock.now();
 
     switch (msg.type) {
       case "joined":
@@ -244,6 +314,11 @@ export class SyncClient {
         this.startCursorTick();
         this.store.applySnapshot(msg);
         this.store.setConnection("connected");
+        this.startHeartbeat();
+        break;
+
+      case "pong":
+        // Liveness reply; lastInboundAt was already refreshed above. No state.
         break;
 
       case "grab_result":
