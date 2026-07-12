@@ -14,6 +14,10 @@ export interface EdgeJitter {
   pos: number;
   /** Tab-height offset, fraction of CELL_SIZE. */
   size: number;
+  /** Bulb-peak offset from the neck's center, fraction of CELL_SIZE (lean/tilt). */
+  tilt: number;
+  /** Left-minus-right bulb half-width offset, fraction of CELL_SIZE (lopsidedness). */
+  asymmetry: number;
 }
 
 /**
@@ -24,10 +28,19 @@ export interface EdgeJitter {
  * a vertical edge +1 bulges toward +x (right).
  *
  * The knob is four cubic segments over local parameters (u along the edge in
- * [0,1], w perpendicular in bulge units). Because the bulb half-width exceeds
+ * [0,1], w perpendicular in bulge units). Because the bulb half-widths exceed
  * the neck half-width, the bulb overhangs the neck — the classic interlocking
  * look. The identical point array is stored on both adjacent pieces, so their
  * shared boundary is one curve (exact complementarity).
+ *
+ * The neck (where the tab meets the flat part of the edge) stays centered on
+ * `tc`, so the straight run-in/run-out segments are unaffected by tilt or
+ * asymmetry; only the bulb itself leans and skews. `jitter.tilt` offsets the
+ * bulb's peak (`apexU`) from `tc`; `jitter.asymmetry` gives the bulb unequal
+ * half-widths on its left (`bwL`) and right (`bwR`), so it bulges more on one
+ * flank than the other. See constants.ts for the worst-case margin check that
+ * keeps these from pushing the bulb outside the edge or collapsing it onto the
+ * neck.
  */
 export function buildTabEdge(
   orientation: EdgeOrientation,
@@ -38,7 +51,9 @@ export function buildTabEdge(
   const tc = 0.5 + jitter.pos;
   const h = TAB_HEIGHT_RATIO + jitter.size;
   const nw = TAB_NECK_HALF_RATIO;
-  const bw = TAB_BULB_HALF_RATIO;
+  const apexU = tc + jitter.tilt;
+  const bwL = TAB_BULB_HALF_RATIO + jitter.asymmetry;
+  const bwR = TAB_BULB_HALF_RATIO - jitter.asymmetry;
 
   // Local (u, w) control points: start, then four cubic segments.
   const local: Array<[number, number]> = [
@@ -46,11 +61,11 @@ export function buildTabEdge(
     [(tc - nw) / 3, 0],
     [(2 * (tc - nw)) / 3, 0],
     [tc - nw, 0],
-    [tc - bw, h * 0.2],
-    [tc - bw, h * 0.9],
-    [tc, h],
-    [tc + bw, h * 0.9],
-    [tc + bw, h * 0.2],
+    [apexU - bwL, h * 0.2],
+    [apexU - bwL, h * 0.9],
+    [apexU, h],
+    [apexU + bwR, h * 0.9],
+    [apexU + bwR, h * 0.2],
     [tc + nw, 0],
     [tc + nw + (1 - (tc + nw)) / 3, 0],
     [tc + nw + (2 * (1 - (tc + nw))) / 3, 0],

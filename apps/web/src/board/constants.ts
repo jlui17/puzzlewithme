@@ -1,11 +1,14 @@
-import { CELL_SIZE, TAB_HEIGHT_RATIO } from "@puzzlewithme/geometry";
+import { CELL_SIZE, TAB_MAX_HEIGHT_RATIO } from "@puzzlewithme/geometry";
 
 /**
- * Tab overhang in world units: how far a tab pokes past its cell edge. Matches
- * the geometry module's own overhang (snap.ts / scatter.ts), so a baked piece
- * tile is exactly large enough to hold the widest possible tab.
+ * Tab overhang in world units: how far a tab pokes past its cell edge. Uses
+ * TAB_MAX_HEIGHT_RATIO (base height plus the largest possible size jitter),
+ * matching the geometry module's own overhang (snap.ts / scatter.ts), so a
+ * baked piece tile is exactly large enough to hold the widest possible tab —
+ * sizing against the base ratio alone would clip the rare piece whose tab
+ * drew a near-maximum size jitter.
  */
-export const OVERHANG = TAB_HEIGHT_RATIO * CELL_SIZE;
+export const OVERHANG = TAB_MAX_HEIGHT_RATIO * CELL_SIZE;
 
 /** A baked piece tile spans the cell plus a tab's worth of overhang on every side. */
 export const TILE_WORLD = CELL_SIZE + 2 * OVERHANG;

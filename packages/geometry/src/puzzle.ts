@@ -1,4 +1,11 @@
-import { CELL_SIZE, PUZZLE_SALT, TAB_POS_JITTER, TAB_SIZE_JITTER } from "./constants.js";
+import {
+  CELL_SIZE,
+  PUZZLE_SALT,
+  TAB_ASYMMETRY_JITTER,
+  TAB_POS_JITTER,
+  TAB_SIZE_JITTER,
+  TAB_TILT_JITTER,
+} from "./constants.js";
 import { buildTabEdge, flatEdge, type EdgeJitter } from "./path.js";
 import { createRng } from "./prng.js";
 import type { EdgeDescriptor, EdgeKind, EdgeSide, Piece, Puzzle, Vec2 } from "./types.js";
@@ -47,6 +54,8 @@ export function generatePuzzle(rows: number, cols: number, seed: string | number
     const jitter: EdgeJitter = {
       pos: rng.range(-TAB_POS_JITTER, TAB_POS_JITTER),
       size: rng.range(-TAB_SIZE_JITTER, TAB_SIZE_JITTER),
+      tilt: rng.range(-TAB_TILT_JITTER, TAB_TILT_JITTER),
+      asymmetry: rng.range(-TAB_ASYMMETRY_JITTER, TAB_ASYMMETRY_JITTER),
     };
     return { points: buildTabEdge(orientation, from, sign, jitter), sign };
   };

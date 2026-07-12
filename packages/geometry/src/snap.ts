@@ -1,9 +1,12 @@
-import { CELL_SIZE, DEFAULT_SNAP_TOLERANCE, TAB_HEIGHT_RATIO } from "./constants.js";
+import { CELL_SIZE, DEFAULT_SNAP_TOLERANCE, TAB_MAX_HEIGHT_RATIO } from "./constants.js";
 import { framePosition, pieceIdToCoord } from "./puzzle.js";
 import { boardBounds } from "./scatter.js";
 import type { GroupState, SnapDrop, SnapEvent, SnapOutcome, Vec2 } from "./types.js";
 
-const OVERHANG = TAB_HEIGHT_RATIO * CELL_SIZE;
+// Uses the worst-case tab extent (TAB_MAX_HEIGHT_RATIO), not the base
+// TAB_HEIGHT_RATIO, so a piece whose tab drew a near-maximum size jitter still
+// clamps fully inside the board instead of poking a sliver past the edge.
+const OVERHANG = TAB_MAX_HEIGHT_RATIO * CELL_SIZE;
 
 function anchorOf(pieces: number[]): number {
   let min = pieces[0]!;

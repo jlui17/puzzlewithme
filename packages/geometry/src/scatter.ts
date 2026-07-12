@@ -1,4 +1,4 @@
-import { BOARD_SIZE_MULTIPLIER, CELL_SIZE, SCATTER_SALT, TAB_HEIGHT_RATIO } from "./constants.js";
+import { BOARD_SIZE_MULTIPLIER, CELL_SIZE, SCATTER_SALT, TAB_MAX_HEIGHT_RATIO } from "./constants.js";
 import { createRng, shuffleInPlace } from "./prng.js";
 import type { Vec2 } from "./types.js";
 
@@ -26,7 +26,9 @@ export function boardBounds(rows: number, cols: number): {
 // overhang plus the max jitter it can receive, so a jittered piece (tabs
 // included) can never poke into where the puzzle assembles.
 const PIECE_HALF = CELL_SIZE / 2;
-const OVERHANG = TAB_HEIGHT_RATIO * CELL_SIZE;
+// Worst-case extent (TAB_MAX_HEIGHT_RATIO), so the piece with the largest
+// possible tab-size jitter still clears the frame by its own overhang.
+const OVERHANG = TAB_MAX_HEIGHT_RATIO * CELL_SIZE;
 // Upper bound on per-piece jitter; the applied jitter (below) is never larger.
 const MAX_JITTER = 0.15 * CELL_SIZE;
 // Full footprint radius: keep this clear of the frame and the board edge.

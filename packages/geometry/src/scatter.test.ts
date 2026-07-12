@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { boardBounds, CELL_SIZE, initialScatter, TAB_HEIGHT_RATIO } from "./index.js";
+import { boardBounds, CELL_SIZE, initialScatter, TAB_MAX_HEIGHT_RATIO } from "./index.js";
 
-const OVERHANG = TAB_HEIGHT_RATIO * CELL_SIZE;
+const OVERHANG = TAB_MAX_HEIGHT_RATIO * CELL_SIZE;
 
 function boxesOverlap(a: { x: number; y: number }, b: { x: number; y: number }): boolean {
   // CELL_SIZE footprints: overlap only if they intersect on both axes.
