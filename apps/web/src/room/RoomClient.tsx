@@ -292,12 +292,16 @@ function DebugOverlay({ sync }: { sync: SyncClient }) {
   if (!enabled) return null;
   const stats = sync.debugStats;
   const state = sync.getState();
-  const now = Date.now();
+  // Ages must use the same clock the stats were stamped with (browserClock,
+  // not Date.now(): the two have different epochs).
+  const now = browserClock.now();
   const age = (ts: number): string => (ts === 0 ? "never" : `${((now - ts) / 1000).toFixed(0)}s ago`);
   const counts = Object.entries(stats.received)
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([type, n]) => `${type}:${n}`)
     .join(" ");
+  // Written by BoardRenderer.publishSceneStats; undefined until the canvas boots.
+  const scene = (globalThis as { __pwmScene?: import("../board/renderer").SceneDebugStats }).__pwmScene;
   return (
     <div className="debug-overlay">
       <div>conn={state.connection} me={state.localGuestId ?? "-"}</div>
@@ -306,8 +310,13 @@ function DebugOverlay({ sync }: { sync: SyncClient }) {
         last frame {age(stats.lastInboundAt)} · last snap_result {age(stats.lastSnapResultAt)}
       </div>
       <div>
-        groups={state.groups.size} locked={[...state.groups.values()].filter((g) => g.locked).length} players=
+        store groups={state.groups.size} locked={[...state.groups.values()].filter((g) => g.locked).length} players=
         {state.players.size}
+      </div>
+      <div>
+        {scene
+          ? `scene nodes=${scene.nodes} locked=${scene.lockedNodes} errs=${scene.syncErrors} rebuilds=${scene.rebuilds} ctxLost=${scene.contextLost}${scene.lastError ? ` last=${scene.lastError}` : ""}`
+          : "scene (not booted)"}
       </div>
     </div>
   );

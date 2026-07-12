@@ -69,7 +69,17 @@ export class BoardStore {
   }
 
   private notify(): void {
-    for (const listener of this.listeners) listener(this.state);
+    for (const listener of this.listeners) {
+      // Isolate listeners from each other: one throwing (e.g. a renderer hit
+      // by a lost WebGL context) must not starve the rest of this update or
+      // abort the message-handling call that triggered it. The store already
+      // mutated; every listener deserves the chance to observe it.
+      try {
+        listener(this.state);
+      } catch (err) {
+        console.error("board-store listener failed", err);
+      }
+    }
   }
 
   setConnection(status: BoardState["connection"]): void {

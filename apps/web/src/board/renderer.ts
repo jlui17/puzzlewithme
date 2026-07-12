@@ -75,6 +75,22 @@ interface CursorNode {
   labelBg: Graphics;
 }
 
+/**
+ * Scene diagnostics published to window.__pwmScene for the ?debug=1 overlay:
+ * lets a device with no console show whether the Pixi scene graph tracks the
+ * store (nodes/lockedNodes vs the store's groups/locked) and whether sync ever
+ * threw or the GPU context was lost. Split store-vs-scene is exactly the
+ * desync signature under investigation.
+ */
+export interface SceneDebugStats {
+  nodes: number;
+  lockedNodes: number;
+  syncErrors: number;
+  rebuilds: number;
+  contextLost: number;
+  lastError: string | null;
+}
+
 export class BoardRenderer {
   private readonly viewport = new Container();
   private readonly groupLayer = new Container();
@@ -82,6 +98,15 @@ export class BoardRenderer {
   private readonly frame = new Graphics();
   private readonly nodes = new Map<string, GroupNode>();
   private readonly cursors = new Map<string, CursorNode>();
+  private needsFullRebuild = false;
+  private readonly sceneStats: SceneDebugStats = {
+    nodes: 0,
+    lockedNodes: 0,
+    syncErrors: 0,
+    rebuilds: 0,
+    contextLost: 0,
+    lastError: null,
+  };
   camera: Camera;
 
   constructor(
@@ -102,6 +127,26 @@ export class BoardRenderer {
     this.camera = fitCamera(puzzle.rows, puzzle.cols, this.viewport_size());
     this.applyCamera();
     this.app.ticker.add(this.tick);
+
+    // iOS Safari revokes WebGL contexts under memory pressure (backgrounded
+    // tab, camera/FaceTime running). Count it and queue a scene rebuild for
+    // the restore, since textures/buffers may not survive.
+    this.app.canvas.addEventListener?.("webglcontextlost", () => {
+      this.sceneStats.contextLost += 1;
+      this.publishSceneStats();
+    });
+    this.app.canvas.addEventListener?.("webglcontextrestored", () => {
+      this.needsFullRebuild = true;
+    });
+    this.publishSceneStats();
+  }
+
+  private publishSceneStats(): void {
+    this.sceneStats.nodes = this.nodes.size;
+    let locked = 0;
+    for (const node of this.nodes.values()) if (node.group.locked) locked += 1;
+    this.sceneStats.lockedNodes = locked;
+    (globalThis as { __pwmScene?: SceneDebugStats }).__pwmScene = { ...this.sceneStats };
   }
 
   private viewport_size(): { width: number; height: number } {
@@ -181,8 +226,27 @@ export class BoardRenderer {
     return null;
   }
 
-  /** Reconcile the scene graph with the current group set (structural changes). */
+  /**
+   * Reconcile the scene graph with the current group set (structural changes).
+   * Failure-isolated: if reconciliation throws (observed shape: the scene
+   * silently freezing on iOS Safari while the store stays correct — ghost
+   * pieces at stale positions), the error is recorded for the debug overlay
+   * and the next frame rebuilds the whole scene from the store instead of
+   * leaving it frozen forever.
+   */
   syncGroups(state: BoardState): void {
+    try {
+      this.reconcileGroups(state);
+    } catch (err) {
+      this.sceneStats.syncErrors += 1;
+      this.sceneStats.lastError = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+      this.needsFullRebuild = true;
+      console.error("syncGroups failed; scheduling full scene rebuild", err);
+    }
+    this.publishSceneStats();
+  }
+
+  private reconcileGroups(state: BoardState): void {
     for (const group of state.groups.values()) {
       const existing = this.nodes.get(group.id);
       if (!existing) {
@@ -200,6 +264,23 @@ export class BoardRenderer {
         this.nodes.delete(id);
       }
     }
+  }
+
+  /** Tear down every group node and rebuild from the store: the recovery path after a sync failure or context restore. */
+  private rebuildAllGroups(state: BoardState): void {
+    for (const [id, node] of this.nodes) {
+      try {
+        node.container.destroy({ children: true });
+      } catch {
+        // A node wrecked by the very failure we're recovering from; orphaning
+        // it is fine — the container is detached below by rebuilding the map.
+      }
+      this.nodes.delete(id);
+    }
+    this.groupLayer.removeChildren();
+    for (const group of state.groups.values()) this.buildNode(group);
+    this.sceneStats.rebuilds += 1;
+    this.publishSceneStats();
   }
 
   private buildNode(group: RenderGroup): void {
@@ -232,6 +313,17 @@ export class BoardRenderer {
 
   private readonly tick = (): void => {
     const state = this.getState();
+    if (this.needsFullRebuild) {
+      this.needsFullRebuild = false;
+      try {
+        this.rebuildAllGroups(state);
+      } catch (err) {
+        // Rebuild itself failing means the GPU context is still gone; retry
+        // next frame rather than giving up.
+        this.needsFullRebuild = true;
+        this.sceneStats.lastError = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+      }
+    }
     const now = this.clock.now();
     for (const [id, node] of this.nodes) {
       const group = state.groups.get(id);
