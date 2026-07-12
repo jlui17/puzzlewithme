@@ -102,6 +102,12 @@ export class RoomRegistry {
     const result = room.engine.join(resumeToken, userId);
     if (!result.ok) return { ok: false, reason: "room_full" };
 
+    // Session history: a join is participation, not creation (creation is
+    // recorded at room-create with created=true; the store OR's the flag, so
+    // this false never clears it). Best-effort — a failed write must not fail
+    // the join, matching saveRoom's non-fatal contract.
+    if (userId !== null) await this.recordMembership(roomId, userId, false);
+
     const playerId = result.identity.id;
     // Whether this identity was already on the board (another tab); if so its
     // presence was already announced, so we don't re-broadcast a join for it.
@@ -332,6 +338,15 @@ export class RoomRegistry {
     if (room.checkpointTimer !== null) {
       clearTimeout(room.checkpointTimer);
       room.checkpointTimer = null;
+    }
+  }
+
+  private async recordMembership(roomId: string, userId: string, createdByUser: boolean): Promise<void> {
+    try {
+      await this.store.recordMembership(roomId, userId, createdByUser);
+    } catch (err) {
+      // Session history is a nice-to-have; a write failure must not break play.
+      console.error(`recording membership failed for room ${roomId}`, err);
     }
   }
 

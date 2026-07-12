@@ -21,6 +21,10 @@ const MULTIPART_OVERHEAD_BUDGET_BYTES = 64 * 1024;
 
 const VALID_TIERS: readonly Tier[] = [100, 250, 500, 1000];
 
+// Matches the join schema's MAX_USER_ID_LENGTH: a UUID is 36 chars, 128 caps a
+// malicious oversized field on the create form while leaving room to grow.
+const MAX_USER_ID_LENGTH = 128;
+
 function isValidTier(value: number): value is Tier {
   return (VALID_TIERS as readonly number[]).includes(value);
 }
@@ -144,7 +148,24 @@ async function handleCreateRoom(req: IncomingMessage, res: ServerResponse, deps:
   await deps.imageStore.put(imageRef, processed.image.bytes, processed.image.contentType);
   await deps.roomStore.create(settings);
 
+  // Record the creator for session history (created=true). Best-effort and
+  // after create succeeds: a membership-write failure must not fail room
+  // creation or orphan the created room, so it's isolated in its own try/catch.
+  const userId = parts.find((part) => part.name === "userId")?.data.toString("utf8").trim();
+  if (userId !== undefined && userId.length > 0 && userId.length <= MAX_USER_ID_LENGTH) {
+    try {
+      await deps.roomStore.recordMembership(roomId, userId, true);
+    } catch (err) {
+      console.error(`recording creator membership failed for room ${roomId}`, err);
+    }
+  }
+
   sendJson(res, 201, { roomId, rows, cols });
+}
+
+async function handleListUserRooms(res: ServerResponse, deps: HttpHandlerDeps, userId: string): Promise<void> {
+  const rooms = await deps.roomStore.listUserRooms(userId);
+  sendJson(res, 200, { rooms });
 }
 
 async function handleGetRoom(res: ServerResponse, deps: HttpHandlerDeps, roomId: string): Promise<void> {
@@ -183,6 +204,16 @@ async function route(req: IncomingMessage, res: ServerResponse, deps: HttpHandle
 
   if (method === "POST" && url.pathname === "/api/rooms") {
     await handleCreateRoom(req, res, deps);
+    return;
+  }
+
+  const userRoomsMatch = /^\/api\/users\/([^/]+)\/rooms$/.exec(url.pathname);
+  if (userRoomsMatch !== null) {
+    if (method !== "GET") {
+      sendJson(res, 405, { error: "method_not_allowed" });
+      return;
+    }
+    await handleListUserRooms(res, deps, decodeURIComponent(userRoomsMatch[1] ?? ""));
     return;
   }
 

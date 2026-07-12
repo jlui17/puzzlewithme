@@ -85,4 +85,59 @@ export function runRoomStoreContractTests(storeName: string, getStore: () => Roo
       ).rejects.toThrow(/does not exist/);
     });
   });
+
+  describe(`${storeName} (session history)`, () => {
+    it("lists a user's created and joined rooms with progress, status, and creator flag", async () => {
+      const store = getStore();
+      const userId = `user-${randomUUID()}`;
+      const created = settingsFor(randomUUID()); // rows 3 x cols 4 -> 12 pieces
+      const joined = settingsFor(randomUUID());
+      await store.create(created);
+      await store.create(joined);
+      await store.recordMembership(created.roomId, userId, true);
+      await store.recordMembership(joined.roomId, userId, false);
+
+      // Deviated state on `joined` so placedPieces reflects credited pieces.
+      await store.save(joined.roomId, { ...emptyRoomState(joined), creditedPieces: [0, 1, 2] });
+
+      const rooms = await store.listUserRooms(userId);
+      expect(rooms).toHaveLength(2);
+      const byId = new Map(rooms.map((r) => [r.roomId, r]));
+
+      const c = byId.get(created.roomId);
+      expect(c).toMatchObject({ createdByUser: true, status: "active", placedPieces: 0, totalPieces: 12 });
+      expect(typeof c?.createdAt).toBe("string");
+      expect(typeof c?.lastActiveAt).toBe("string");
+
+      const j = byId.get(joined.roomId);
+      expect(j).toMatchObject({ createdByUser: false, placedPieces: 3, totalPieces: 12 });
+    });
+
+    it("keeps createdByUser sticky when a creator later rejoins as a participant", async () => {
+      const store = getStore();
+      const userId = `user-${randomUUID()}`;
+      const settings = settingsFor(randomUUID());
+      await store.create(settings);
+      await store.recordMembership(settings.roomId, userId, true);
+      await store.recordMembership(settings.roomId, userId, false); // rejoin
+      const rooms = await store.listUserRooms(userId);
+      expect(rooms).toHaveLength(1);
+      expect(rooms[0]?.createdByUser).toBe(true);
+    });
+
+    it("is idempotent per (room, user): a repeated join does not duplicate the listing", async () => {
+      const store = getStore();
+      const userId = `user-${randomUUID()}`;
+      const settings = settingsFor(randomUUID());
+      await store.create(settings);
+      await store.recordMembership(settings.roomId, userId, false);
+      await store.recordMembership(settings.roomId, userId, false);
+      expect(await store.listUserRooms(userId)).toHaveLength(1);
+    });
+
+    it("returns an empty list for a user with no rooms", async () => {
+      const store = getStore();
+      expect(await store.listUserRooms(`user-${randomUUID()}`)).toEqual([]);
+    });
+  });
 }

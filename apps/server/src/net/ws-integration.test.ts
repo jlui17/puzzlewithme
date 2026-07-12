@@ -254,6 +254,14 @@ describe("websocket net layer", () => {
     expect(me?.placedCount).toBe(1);
   });
 
+  it("records session-history participation (createdByUser false) when a user joins over WS", async () => {
+    await join(ROOM, null, "user-J");
+    const rooms = await store.listUserRooms("user-J");
+    expect(rooms).toEqual([
+      expect.objectContaining({ roomId: ROOM, createdByUser: false, status: "active" }),
+    ]);
+  });
+
   it("converges a live-derived board to a fresh snapshot (NFR-6)", async () => {
     const a = await join(ROOM);
     const b = await join(ROOM);

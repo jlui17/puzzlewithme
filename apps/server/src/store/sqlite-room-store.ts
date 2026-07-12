@@ -3,7 +3,7 @@ import { dirname } from "node:path";
 import Database from "better-sqlite3";
 import type { RoomSettings } from "@puzzlewithme/shared";
 import type { RoomDeviations, SerializedRoomState } from "../engine/types.js";
-import { emptyRoomState, type RoomStore } from "./room-store.js";
+import { emptyRoomState, type RoomStore, type UserRoomSummary } from "./room-store.js";
 
 /** SQLite has no unique_violation code; better-sqlite3 throws this message for a PK collision. */
 const CONSTRAINT_ERROR = "SQLITE_CONSTRAINT_PRIMARYKEY";
@@ -57,6 +57,18 @@ export class SqliteRoomStore implements RoomStore {
         updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
       )
     `);
+    // Session-history membership: one row per (room, persistent user). No FK to
+    // rooms — a membership write must never fail the join/create it rides on,
+    // and listUserRooms already inner-joins rooms so an orphan row is invisible.
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS room_members (
+        room_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        created_by_user INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (room_id, user_id)
+      )
+    `);
+    this.db.exec(`CREATE INDEX IF NOT EXISTS room_members_user_id ON room_members (user_id)`);
   }
 
   async create(settings: RoomSettings): Promise<SerializedRoomState> {
@@ -97,6 +109,55 @@ export class SqliteRoomStore implements RoomStore {
     if (result.changes === 0) {
       throw new Error(`room ${roomId} does not exist`);
     }
+  }
+
+  async recordMembership(roomId: string, userId: string, createdByUser: boolean): Promise<void> {
+    // MAX(...) keeps created_by_user sticky: once 1, a later participant write
+    // (0) can't clear it, so the creator flag survives rejoins.
+    this.db
+      .prepare(
+        `INSERT INTO room_members (room_id, user_id, created_by_user) VALUES (?, ?, ?)
+         ON CONFLICT (room_id, user_id)
+         DO UPDATE SET created_by_user = MAX(created_by_user, excluded.created_by_user)`,
+      )
+      .run(roomId, userId, createdByUser ? 1 : 0);
+  }
+
+  async listUserRooms(userId: string): Promise<UserRoomSummary[]> {
+    const rows = this.db
+      .prepare<
+        [string],
+        { settings: string; status: string; created_at: string; updated_at: string; created_by_user: number }
+      >(
+        `SELECT r.settings AS settings, r.state AS state, r.status AS status,
+                r.created_at AS created_at, r.updated_at AS updated_at,
+                m.created_by_user AS created_by_user
+         FROM room_members m
+         JOIN rooms r ON r.id = m.room_id
+         WHERE m.user_id = ?
+         ORDER BY r.updated_at DESC`,
+      )
+      .all(userId) as Array<{
+      settings: string;
+      state: string;
+      status: string;
+      created_at: string;
+      updated_at: string;
+      created_by_user: number;
+    }>;
+    return rows.map((row) => {
+      const settings = JSON.parse(row.settings) as RoomSettings;
+      const state = JSON.parse(row.state) as RoomDeviations;
+      return {
+        roomId: settings.roomId,
+        status: settings.status,
+        createdByUser: row.created_by_user === 1,
+        createdAt: row.created_at,
+        lastActiveAt: row.updated_at,
+        placedPieces: state.creditedPieces.length,
+        totalPieces: settings.rows * settings.cols,
+      };
+    });
   }
 
   /** Closes the underlying file handle; call once on shutdown (or test teardown). */

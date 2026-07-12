@@ -36,6 +36,7 @@ const nextConfig: NextConfig = {
     return [
       { source: "/api/rooms", destination: `${SERVER_ORIGIN}/api/rooms` },
       { source: "/api/rooms/:path*", destination: `${SERVER_ORIGIN}/api/rooms/:path*` },
+      { source: "/api/users/:path*", destination: `${SERVER_ORIGIN}/api/users/:path*` },
     ];
   },
 };

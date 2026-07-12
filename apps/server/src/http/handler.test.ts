@@ -146,6 +146,34 @@ describe("http handler", () => {
     expect(meta.format).toBe("webp");
   });
 
+  it("lists a user's rooms after creating one with a userId, and stays empty for others", async () => {
+    const bytes = await makeJpeg(800, 600);
+    const form = new FormData();
+    form.set("image", new Blob([bytes], { type: "image/jpeg" }), "photo.jpg");
+    form.set("tier", "100");
+    form.set("userId", "user-history");
+    const createRes = await fetch(`${baseUrl}/api/rooms`, { method: "POST", body: form });
+    expect(createRes.status).toBe(201);
+    const { roomId } = await json(createRes);
+
+    const listRes = await fetch(`${baseUrl}/api/users/user-history/rooms`);
+    expect(listRes.status).toBe(200);
+    const { rooms } = await json(listRes);
+    expect(Array.isArray(rooms)).toBe(true);
+    const mine = rooms.find((r: { roomId: string }) => r.roomId === roomId);
+    expect(mine).toMatchObject({ createdByUser: true, status: "active", placedPieces: 0 });
+    expect(mine.totalPieces).toBeGreaterThan(0);
+
+    const otherRes = await fetch(`${baseUrl}/api/users/nobody/rooms`);
+    expect(otherRes.status).toBe(200);
+    expect((await json(otherRes)).rooms).toEqual([]);
+  });
+
+  it("returns 405 for a non-GET on the user-rooms route", async () => {
+    const res = await fetch(`${baseUrl}/api/users/someone/rooms`, { method: "POST" });
+    expect(res.status).toBe(405);
+  });
+
   it("gives two created rooms distinct, unguessable-length ids", async () => {
     const bytes = await makeJpeg(800, 800);
     async function create(): Promise<string> {

@@ -20,6 +20,18 @@ export async function migrate(pool: pg.Pool): Promise<void> {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
     )
   `);
+  // Session-history membership, mirroring the SQLite schema. No FK to rooms so
+  // a membership write can't fail the join/create it rides on; listUserRooms
+  // inner-joins rooms, so an orphan row is simply invisible.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS room_members (
+      room_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      created_by_user BOOLEAN NOT NULL DEFAULT false,
+      PRIMARY KEY (room_id, user_id)
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS room_members_user_id ON room_members (user_id)`);
 }
 
 // Runnable directly (`tsx src/store/migrate.ts`) for deploy-time migration
