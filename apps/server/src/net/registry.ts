@@ -99,7 +99,20 @@ export class RoomRegistry {
     const room = await this.getOrLoad(roomId);
     if (room === null) return { ok: false, reason: "room_not_found" };
 
-    const result = room.engine.join(resumeToken, userId);
+    // The user's app-wide display name (set on any prior rename, in any room):
+    // a minted identity starts with it, a resumed one syncs to it. Read
+    // best-effort — a store failure degrades to the generated-name flow rather
+    // than failing the join.
+    let displayName: string | null = null;
+    if (userId !== null) {
+      try {
+        displayName = await this.store.getUserDisplayName(userId);
+      } catch (err) {
+        console.error(`loading display name failed for user ${userId}`, err);
+      }
+    }
+
+    const result = room.engine.join(resumeToken, userId, displayName);
     if (!result.ok) return { ok: false, reason: "room_full" };
 
     // Session history: a join is participation, not creation (creation is
@@ -209,6 +222,14 @@ export class RoomRegistry {
     if (!result.ok) {
       conn.send(errorFor(mutationReasonToCode(result.reason)));
       return;
+    }
+    // A rename is also the user's app-wide display name (one name per person
+    // across rooms; future joins anywhere start with it). Best-effort, like
+    // every session-history write: a store failure must not break the rename.
+    if (result.userId !== undefined) {
+      void this.store.setUserDisplayName(result.userId, result.name).catch((err: unknown) => {
+        console.error(`persisting display name failed for user ${result.userId}`, err);
+      });
     }
     this.broadcast(room, { type: "presence", event: "renamed", guestId: playerId, name: result.name }, conn);
     this.markDirty(room);

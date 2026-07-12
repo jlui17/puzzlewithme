@@ -172,6 +172,66 @@ describe("resume by persistent userId", () => {
     expect(b.resumed).toBe(false);
     expect(b.identity.id).not.toBe(a.identity.id);
   });
+});
+
+describe("app-wide display name", () => {
+  it("mints a fresh identity with the user's display name instead of a generated one", () => {
+    const { engine } = makeEngine();
+    const a = engine.join(null, "user-A", "Justin");
+    if (!a.ok) throw new Error("unreachable");
+    expect(a.identity.name).toBe("Justin");
+  });
+
+  it("syncs a resumed identity to the display name (a rename made elsewhere follows the user)", () => {
+    const { engine } = makeEngine();
+    const first = engine.join(null, "user-A");
+    if (!first.ok) throw new Error("unreachable");
+    engine.leave(first.identity.id);
+
+    const back = engine.join(null, "user-A", "Justin");
+    if (!back.ok) throw new Error("unreachable");
+    expect(back.identity.id).toBe(first.identity.id);
+    expect(back.identity.name).toBe("Justin");
+  });
+
+  it("keeps the generated name when no display name is supplied", () => {
+    const { engine } = makeEngine();
+    const a = engine.join(null, "user-A", null);
+    if (!a.ok) throw new Error("unreachable");
+    expect(a.identity.name).not.toBe("");
+  });
+
+  it("does not touch a completed room's frozen identities on rejoin", () => {
+    const { engine } = makeEngine();
+    const a = engine.join(null, "user-A");
+    if (!a.ok) throw new Error("unreachable");
+    // Same completing sequence as the completion suite's completeRoom().
+    dropOk(engine, a.identity.id, "0-0", -160, -60);
+    dropOk(engine, a.identity.id, "0-1", -56, -57);
+    dropOk(engine, a.identity.id, "0-1", 2, 1);
+    dropOk(engine, a.identity.id, "1-0", 1, 102);
+    dropOk(engine, a.identity.id, "1-1", 101, 101);
+
+    const back = engine.join(null, "user-A", "Justin");
+    if (!back.ok) throw new Error("unreachable");
+    // FR-25: a completed room is read-only, including its scoreboard names.
+    expect(back.identity.name).toBe(a.identity.name);
+  });
+
+  it("rename reports the identity's userId so the caller can persist the name app-wide", () => {
+    const { engine } = makeEngine();
+    const withUser = engine.join(null, "user-A");
+    const anonymous = engine.join(null);
+    if (!withUser.ok || !anonymous.ok) throw new Error("unreachable");
+
+    const renamed = engine.rename(withUser.identity.id, "Justin");
+    if (!renamed.ok) throw new Error("unreachable");
+    expect(renamed.userId).toBe("user-A");
+
+    const anonRenamed = engine.rename(anonymous.identity.id, "Ghost");
+    if (!anonRenamed.ok) throw new Error("unreachable");
+    expect(anonRenamed.userId).toBeUndefined();
+  });
 
   it("round-trips the userId association through serialize -> construct", () => {
     const { engine, clock } = makeEngine();

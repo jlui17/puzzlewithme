@@ -104,7 +104,13 @@ export type DropResult =
   | MutationRejected;
 
 export type RenameResult =
-  | { ok: true; guestId: string; name: string }
+  | {
+      ok: true;
+      guestId: string;
+      name: string;
+      /** The renamer's persistent userId when known, so the caller can persist the name app-wide. */
+      userId?: string;
+    }
   | MutationRejected;
 
 /** A hold ended without a drop; feeds a GroupReleasedMessage broadcast (FR-14, §9). */

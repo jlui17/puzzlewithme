@@ -269,6 +269,23 @@ describe("websocket net layer", () => {
     ]);
   });
 
+  it("a rename persists as the user's app-wide display name and follows them into another room", async () => {
+    const a = await join(ROOM, null, "user-N");
+    a.client.send({ type: "rename", name: "Justin" });
+    // The rename broadcast confirms the engine applied it; the display-name
+    // write rides the same call.
+    const keeper = await join(ROOM);
+    a.client.send({ type: "rename", name: "Justin2" });
+    await keeper.client.waitFor((m) => m.type === "presence" && m.event === "renamed" && m.name === "Justin2");
+    expect(await store.getUserDisplayName("user-N")).toBe("Justin2");
+
+    // A brand-new room: the minted identity starts as the display name, not a
+    // generated one.
+    await makeRoom("room-2");
+    const elsewhere = await join("room-2", null, "user-N");
+    expect(elsewhere.name).toBe("Justin2");
+  });
+
   it("converges a live-derived board to a fresh snapshot (NFR-6)", async () => {
     const a = await join(ROOM);
     const b = await join(ROOM);

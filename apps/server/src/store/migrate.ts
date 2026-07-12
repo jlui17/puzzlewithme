@@ -32,6 +32,15 @@ export async function migrate(pool: pg.Pool): Promise<void> {
     )
   `);
   await pool.query(`CREATE INDEX IF NOT EXISTS room_members_user_id ON room_members (user_id)`);
+  // App-wide user attributes keyed by the persistent anonymous userId,
+  // mirroring the SQLite schema. Today just the display name; the natural
+  // place for future sign-up fields.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS users (
+      user_id TEXT PRIMARY KEY,
+      display_name TEXT NOT NULL
+    )
+  `);
 }
 
 // Runnable directly (`tsx src/store/migrate.ts`) for deploy-time migration

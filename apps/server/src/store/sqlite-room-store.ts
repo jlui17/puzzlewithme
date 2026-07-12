@@ -69,6 +69,14 @@ export class SqliteRoomStore implements RoomStore {
       )
     `);
     this.db.exec(`CREATE INDEX IF NOT EXISTS room_members_user_id ON room_members (user_id)`);
+    // App-wide user attributes keyed by the persistent anonymous userId. Today
+    // just the display name; the natural place for future sign-up fields.
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS users (
+        user_id TEXT PRIMARY KEY,
+        display_name TEXT NOT NULL
+      )
+    `);
   }
 
   async create(settings: RoomSettings): Promise<SerializedRoomState> {
@@ -158,6 +166,22 @@ export class SqliteRoomStore implements RoomStore {
         totalPieces: settings.rows * settings.cols,
       };
     });
+  }
+
+  async getUserDisplayName(userId: string): Promise<string | null> {
+    const row = this.db
+      .prepare<[string], { display_name: string }>(`SELECT display_name FROM users WHERE user_id = ?`)
+      .get(userId);
+    return row?.display_name ?? null;
+  }
+
+  async setUserDisplayName(userId: string, displayName: string): Promise<void> {
+    this.db
+      .prepare(
+        `INSERT INTO users (user_id, display_name) VALUES (?, ?)
+         ON CONFLICT (user_id) DO UPDATE SET display_name = excluded.display_name`,
+      )
+      .run(userId, displayName);
   }
 
   /** Closes the underlying file handle; call once on shutdown (or test teardown). */

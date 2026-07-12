@@ -124,6 +124,22 @@ export class PostgresRoomStore implements RoomStore {
     }));
   }
 
+  async getUserDisplayName(userId: string): Promise<string | null> {
+    const result = await this.pool.query<{ display_name: string }>(
+      `SELECT display_name FROM users WHERE user_id = $1`,
+      [userId],
+    );
+    return result.rows[0]?.display_name ?? null;
+  }
+
+  async setUserDisplayName(userId: string, displayName: string): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO users (user_id, display_name) VALUES ($1, $2)
+       ON CONFLICT (user_id) DO UPDATE SET display_name = excluded.display_name`,
+      [userId, displayName],
+    );
+  }
+
   /** Releases the connection pool; call once on shutdown (or test teardown). */
   async close(): Promise<void> {
     await this.pool.end();

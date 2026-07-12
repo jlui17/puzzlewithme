@@ -140,4 +140,30 @@ export function runRoomStoreContractTests(storeName: string, getStore: () => Roo
       expect(await store.listUserRooms(`user-${randomUUID()}`)).toEqual([]);
     });
   });
+
+  describe(`${storeName} (display names)`, () => {
+    it("returns null for a user who never set a name", async () => {
+      const store = getStore();
+      expect(await store.getUserDisplayName(`user-${randomUUID()}`)).toBeNull();
+    });
+
+    it("round-trips a set name and overwrites it on a later set", async () => {
+      const store = getStore();
+      const userId = `user-${randomUUID()}`;
+      await store.setUserDisplayName(userId, "Justin");
+      expect(await store.getUserDisplayName(userId)).toBe("Justin");
+      await store.setUserDisplayName(userId, "J2");
+      expect(await store.getUserDisplayName(userId)).toBe("J2");
+    });
+
+    it("keeps names independent per user", async () => {
+      const store = getStore();
+      const a = `user-${randomUUID()}`;
+      const b = `user-${randomUUID()}`;
+      await store.setUserDisplayName(a, "Alice");
+      await store.setUserDisplayName(b, "Bob");
+      expect(await store.getUserDisplayName(a)).toBe("Alice");
+      expect(await store.getUserDisplayName(b)).toBe("Bob");
+    });
+  });
 }

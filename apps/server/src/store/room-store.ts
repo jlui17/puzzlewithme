@@ -40,6 +40,15 @@ export interface RoomStore {
   recordMembership(roomId: string, userId: string, createdByUser: boolean): Promise<void>;
   /** A user's rooms (created or joined), newest-active first; empty for an unknown user. */
   listUserRooms(userId: string): Promise<UserRoomSummary[]>;
+  /**
+   * The user's app-wide display name, or null when they never set one. The
+   * name is an attribute of the persistent userId (one name per person across
+   * every room), not the identity key itself — keying on the name would break
+   * a user's history on rename and collide two people who pick the same name.
+   */
+  getUserDisplayName(userId: string): Promise<string | null>;
+  /** Upsert the user's app-wide display name (written on every in-room rename). */
+  setUserDisplayName(userId: string, displayName: string): Promise<void>;
 }
 
 /** A brand-new room's state: settings and nothing else (§8: an untouched room stores no groups). */
@@ -63,6 +72,8 @@ export class InMemoryRoomStore implements RoomStore {
   private readonly timestamps = new Map<string, RoomTimestamps>();
   /** roomId -> (userId -> createdByUser). Mirrors the SQL stores' room_members table. */
   private readonly memberships = new Map<string, Map<string, boolean>>();
+  /** userId -> display name. Mirrors the SQL stores' users table. */
+  private readonly displayNames = new Map<string, string>();
 
   // structuredClone at every boundary so callers and the store never share
   // object graphs — mutating a loaded state must not silently mutate the
@@ -120,5 +131,13 @@ export class InMemoryRoomStore implements RoomStore {
       });
     }
     return summaries.sort((a, b) => (a.lastActiveAt < b.lastActiveAt ? 1 : a.lastActiveAt > b.lastActiveAt ? -1 : 0));
+  }
+
+  async getUserDisplayName(userId: string): Promise<string | null> {
+    return this.displayNames.get(userId) ?? null;
+  }
+
+  async setUserDisplayName(userId: string, displayName: string): Promise<void> {
+    this.displayNames.set(userId, displayName);
   }
 }

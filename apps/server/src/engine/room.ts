@@ -141,8 +141,14 @@ export class RoomEngine {
    * userId); anything else mints a fresh identity. A minted identity records
    * its userId so later joins by that userId resume it. Completed rooms accept
    * joins — they're viewable forever (FR-25) — but no longer accrue solving time.
+   *
+   * `displayName` is the user's app-wide name (users table): a minted identity
+   * uses it instead of a generated name, and a resumed identity syncs to it so
+   * a rename made in another room follows the user here. The sync happens
+   * before the snapshot/joined messages are built, so every client sees the
+   * current name without a separate rename broadcast.
    */
-  join(resumeToken?: string | null, userId?: string | null): JoinResult {
+  join(resumeToken?: string | null, userId?: string | null, displayName?: string | null): JoinResult {
     let resumedId = resumeToken != null ? this.tokenToGuest.get(resumeToken) : undefined;
     if (resumedId === undefined && userId != null) resumedId = this.userIdToGuest.get(userId);
     const existing = resumedId !== undefined ? this.identities.get(resumedId) : undefined;
@@ -157,6 +163,7 @@ export class RoomEngine {
     let record: IdentityRecord;
     if (existing !== undefined) {
       record = existing;
+      if (displayName != null && this.settings.status !== "completed") record.name = displayName;
     } else {
       const takenNames = new Set<string>();
       const usedColors = new Set<string>();
@@ -166,7 +173,7 @@ export class RoomEngine {
       }
       record = {
         id: randomUUID(),
-        name: this.nextName(takenNames),
+        name: displayName ?? this.nextName(takenNames),
         color: assignCursorColor(usedColors, this.identities.size),
         placedCount: 0,
         resumeToken: randomUUID(),
@@ -196,7 +203,7 @@ export class RoomEngine {
     const record = this.identities.get(playerId);
     if (record === undefined) return { ok: false, reason: "unknown_player" };
     record.name = name;
-    return { ok: true, guestId: playerId, name };
+    return { ok: true, guestId: playerId, name, ...(record.userId !== undefined ? { userId: record.userId } : {}) };
   }
 
   /**
