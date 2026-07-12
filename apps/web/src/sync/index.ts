@@ -23,8 +23,8 @@ export type {
 export type {
   BoardState,
   ConnectionStatus,
-  GroupMotion,
   MotionSample,
+  MotionState,
   RemoteCursor,
   RenderGroup,
   SyncEvent,

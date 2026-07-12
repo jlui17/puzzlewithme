@@ -1,5 +1,5 @@
 import { boardBounds, CELL_SIZE, framePosition, type Puzzle } from "@puzzlewithme/geometry";
-import type { BoardState, Clock, GroupMotion, RenderGroup, Vec2 } from "../sync";
+import type { BoardState, Clock, MotionState, RenderGroup, Vec2 } from "../sync";
 import { Application, Container, Graphics, Sprite, Text } from "pixi.js";
 import type { AtlasResult } from "./atlas";
 import {
@@ -9,7 +9,7 @@ import {
   screenToWorld,
   worldToScreen,
 } from "./camera";
-import { INTERP_DELAY_MS } from "./constants";
+import { CURSOR_INTERP_DELAY_MS, INTERP_DELAY_MS } from "./constants";
 import { pointInPolygon } from "./hit-test";
 
 /**
@@ -18,7 +18,8 @@ import { pointInPolygon } from "./hit-test";
  *  - structural (onState): add/remove/rebuild group containers when the group
  *    set changes (joins, merges, locks). Infrequent.
  *  - per-frame (ticker): reposition every group container and redraw cursors,
- *    interpolating remotely-held groups between motion samples. Every frame.
+ *    interpolating remotely-held groups and remote cursors between motion
+ *    samples. Every frame.
  */
 
 const MIN_ID = (pieces: RenderGroup["pieces"], cols: number): number => {
@@ -35,18 +36,21 @@ function lerp(a: Vec2, b: Vec2, t: number): Vec2 {
 }
 
 /**
- * Where to draw a group this frame. A remotely-held group interpolates between
- * its two newest samples at (now - INTERP_DELAY), so relayed 30 Hz motion reads
- * as continuous (NFR-2). Everything else — settled groups and the local drag,
- * which leads optimistically — uses the store position directly.
+ * Where to draw a group or cursor this frame. Anything with a motion sample
+ * (a remotely-held group or another player's cursor) interpolates between its
+ * two newest samples at `renderTime` (now minus the source's interp delay:
+ * INTERP_DELAY_MS for groups, CURSOR_INTERP_DELAY_MS for cursors), so relayed
+ * motion reads as continuous (NFR-2) regardless of the source's send rate.
+ * Everything else, settled groups and the local drag (which leads
+ * optimistically), uses `fallback` (the store's raw position) directly.
  */
-function renderPosition(motion: GroupMotion | undefined, group: RenderGroup, now: number): Vec2 {
-  if (!motion) return group.position;
+function renderPosition(motion: MotionState | undefined, fallback: Vec2, renderTime: number): Vec2 {
+  if (!motion) return fallback;
   const { current, previous } = motion;
   if (!previous) return current.position;
   const span = current.timestamp - previous.timestamp;
   if (span <= 0) return current.position;
-  const t = (now - INTERP_DELAY_MS - previous.timestamp) / span;
+  const t = (renderTime - previous.timestamp) / span;
   if (t <= 0) return previous.position;
   if (t >= 1) return current.position;
   return lerp(previous.position, current.position, t);
@@ -232,13 +236,13 @@ export class BoardRenderer {
     for (const [id, node] of this.nodes) {
       const group = state.groups.get(id);
       if (!group) continue;
-      const pos = renderPosition(state.motion.get(id), group, now);
+      const pos = renderPosition(state.motion.get(id), group.position, now - INTERP_DELAY_MS);
       node.container.position.set(pos.x, pos.y);
     }
-    this.updateCursors(state);
+    this.updateCursors(state, now);
   };
 
-  private updateCursors(state: BoardState): void {
+  private updateCursors(state: BoardState, now: number): void {
     const seen = new Set<string>();
     for (const cursor of state.cursors.values()) {
       if (cursor.guestId === state.localGuestId) continue;
@@ -256,7 +260,12 @@ export class BoardRenderer {
           .roundRect(9, 10, node.label.width + 10, node.label.height + 4, 4)
           .fill({ color: 0x161b22, alpha: 0.85 });
       }
-      const s = worldToScreen(this.camera, cursor.x, cursor.y);
+      const pos = renderPosition(
+        state.cursorMotion.get(cursor.guestId),
+        { x: cursor.x, y: cursor.y },
+        now - CURSOR_INTERP_DELAY_MS,
+      );
+      const s = worldToScreen(this.camera, pos.x, pos.y);
       node.container.position.set(s.x, s.y);
     }
     for (const [id, node] of this.cursors) {

@@ -1,8 +1,9 @@
 /**
  * Intent side + connection lifecycle (deliverables 2 and 4). Owns the socket,
- * the outbound throttles, the reconnect backoff, and the optimistic-drag state
- * machine; delegates all board mutation to BoardStore. Sends intents only
- * (§6.2) and reconciles to authoritative results.
+ * the outbound move throttle, the periodic cursor tick, the reconnect backoff,
+ * and the optimistic-drag state machine; delegates all board mutation to
+ * BoardStore. Sends intents only (§6.2) and reconciles to authoritative
+ * results.
  */
 import type { ClientMessage, ServerMessage } from "@puzzlewithme/shared";
 import { backoffDelay } from "./backoff";
@@ -28,12 +29,19 @@ import { Throttle } from "./throttle";
 const MOVE_INTERVAL_MS = 1000 / 30;
 
 /**
- * 15 Hz cursor relay (~67 ms). A cursor carries less precision expectation than
- * a held piece, and a room holds up to 20 players (NFR-3), so halving the move
- * rate halves presence fan-out while still reading as smooth once interpolated.
- * Same convention-based basis as the move rate; not measured.
+ * 10 Hz cursor ping (100 ms), fired on its own fixed timer rather than derived
+ * from mousemove events: a bursty or idle pointer never distorts the send
+ * cadence, so the receiver sees an evenly-spaced sample stream it can
+ * interpolate cleanly (NFR-2's "must look continuous, not teleporting").
+ * 10 Hz sits in the usual presence-cursor range (collaborative editors relay
+ * around 10-20 Hz) and keeps fan-out cheap at the 20-player cap (NFR-3):
+ * 20 senders * 19 receivers * 10/s ≈ 3800 msg/s room-wide worst case, a third
+ * of what the 30 Hz move relay can generate. Lower rates save little more and
+ * push the receiver's interp delay (CURSOR_INTERP_DELAY_MS scales with this
+ * interval) past NFR-2's 200 ms budget. Convention-based like the move rate
+ * above, not measured against this game's live traffic.
  */
-const CURSOR_INTERVAL_MS = 1000 / 15;
+const CURSOR_INTERVAL_MS = 1000 / 10;
 
 /**
  * Reconnect backoff (§7.4). 500 ms base recovers a transient blip almost
@@ -68,7 +76,6 @@ export interface SyncClientConfig {
 export class SyncClient {
   readonly store: BoardStore;
   private readonly moveThrottle = new Throttle(MOVE_INTERVAL_MS);
-  private readonly cursorThrottle = new Throttle(CURSOR_INTERVAL_MS);
   private readonly eventListeners = new Set<(event: SyncEvent) => void>();
 
   private socket: SyncSocket | null = null;
@@ -77,6 +84,12 @@ export class SyncClient {
   private reconnectAttempt = 0;
   private reconnectTimer: TimerHandle | null = null;
   private closedByUser = false;
+
+  /** Latest known local cursor position; relayed by cursorTick, not on arrival. */
+  private pendingCursor: Vec2 | null = null;
+  /** The position last actually sent, to skip a tick when nothing changed. */
+  private lastSentCursor: Vec2 | null = null;
+  private cursorTickTimer: TimerHandle | null = null;
 
   constructor(private readonly config: SyncClientConfig) {
     this.store = new BoardStore(config.clock);
@@ -113,9 +126,45 @@ export class SyncClient {
       this.config.scheduler.clearTimer(this.reconnectTimer);
       this.reconnectTimer = null;
     }
+    // Stop here, not just in handleClose: the real WebSocket's onclose fires
+    // asynchronously, and the self-rescheduling cursor tick must not outlive
+    // this call while that callback is still in flight.
+    this.stopCursorTick();
     this.socket?.close();
     this.socket = null;
     this.store.setConnection("closed");
+  }
+
+  /**
+   * Fixed 10 Hz relay of the latest local cursor position: a periodic ping,
+   * not a per-mousemove send. Reschedules itself via the injected Scheduler
+   * (no bare setInterval, matching the reconnect backoff's seam) so tests can
+   * drive it with fake time. Skips the send when disconnected or when the
+   * position hasn't changed since the last one actually sent.
+   */
+  private readonly cursorTick = (): void => {
+    if (
+      this.isConnected() &&
+      this.pendingCursor &&
+      (!this.lastSentCursor ||
+        this.pendingCursor.x !== this.lastSentCursor.x ||
+        this.pendingCursor.y !== this.lastSentCursor.y)
+    ) {
+      this.send({ type: "cursor", x: this.pendingCursor.x, y: this.pendingCursor.y });
+      this.lastSentCursor = this.pendingCursor;
+    }
+    this.cursorTickTimer = this.config.scheduler.setTimer(this.cursorTick, CURSOR_INTERVAL_MS);
+  };
+
+  private startCursorTick(): void {
+    if (this.cursorTickTimer !== null) return;
+    this.cursorTickTimer = this.config.scheduler.setTimer(this.cursorTick, CURSOR_INTERVAL_MS);
+  }
+
+  private stopCursorTick(): void {
+    if (this.cursorTickTimer === null) return;
+    this.config.scheduler.clearTimer(this.cursorTickTimer);
+    this.cursorTickTimer = null;
   }
 
   private openSocket(): void {
@@ -145,6 +194,9 @@ export class SyncClient {
   }
 
   private handleClose(): void {
+    // Any disconnect (ours or the transport's) ends the tick; a fresh
+    // "connected" snapshot restarts it (see the "snapshot" case below).
+    this.stopCursorTick();
     this.socket = null;
     if (this.closedByUser) {
       // room_full is terminal too, but keep that status so the UI can show why.
@@ -185,6 +237,11 @@ export class SyncClient {
         this.reconnectAttempt = 0;
         this.drag = null;
         this.moveThrottle.reset();
+        // Force the next tick to resend regardless of the pre-disconnect
+        // position: this is a new connection, so any prior send is stale to
+        // other clients even if our pointer never moved across the gap.
+        this.lastSentCursor = null;
+        this.startCursorTick();
         this.store.applySnapshot(msg);
         this.store.setConnection("connected");
         break;
@@ -308,12 +365,14 @@ export class SyncClient {
     }
   }
 
-  /** Relay the local cursor, throttled to 15 Hz; dropped while disconnected (stale). */
+  /**
+   * Record the latest local cursor position for the periodic cursorTick to
+   * relay (see CURSOR_INTERVAL_MS); this call itself never sends. Recorded
+   * even while disconnected so the first tick after reconnect immediately
+   * carries the up-to-date position.
+   */
   moveCursor(x: number, y: number): void {
-    if (!this.isConnected()) return;
-    if (this.cursorThrottle.tryEmit(this.config.clock.now())) {
-      this.send({ type: "cursor", x, y });
-    }
+    this.pendingCursor = { x, y };
   }
 
   rename(name: string): void {

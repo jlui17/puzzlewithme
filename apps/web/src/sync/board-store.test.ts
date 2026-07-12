@@ -114,6 +114,45 @@ describe("BoardStore snapshot", () => {
     expect(store.getState().groups.get("0-1")!.heldBy).toBe("guest-2");
   });
 
+  it("applies a cursor ping and records a motion sample for interpolation", () => {
+    const clock = new FakeClock();
+    const store = new BoardStore(clock);
+    store.applySnapshot(emptySnapshot());
+    store.setLocalIdentity("me");
+
+    clock.advance(1000);
+    store.applyCursor({ type: "cursor", guestId: "guest-2", x: 10, y: 20 });
+    clock.advance(100);
+    store.applyCursor({ type: "cursor", guestId: "guest-2", x: 30, y: 40 });
+
+    expect(store.getState().cursors.get("guest-2")).toEqual({ guestId: "guest-2", x: 30, y: 40 });
+    const motion = store.getState().cursorMotion.get("guest-2")!;
+    expect(motion.current).toEqual({ position: { x: 30, y: 40 }, timestamp: 1100 });
+    expect(motion.previous).toEqual({ position: { x: 10, y: 20 }, timestamp: 1000 });
+
+    // Our own echo never produces a remote cursor or a sample.
+    store.applyCursor({ type: "cursor", guestId: "me", x: 1, y: 1 });
+    expect(store.getState().cursors.has("me")).toBe(false);
+    expect(store.getState().cursorMotion.has("me")).toBe(false);
+  });
+
+  it("drops cursor motion when the player leaves and on resync", () => {
+    const store = makeStore();
+    store.applySnapshot(emptySnapshot());
+    store.applyCursor({ type: "cursor", guestId: "guest-2", x: 10, y: 20 });
+    expect(store.getState().cursorMotion.has("guest-2")).toBe(true);
+
+    store.applyPresence({ type: "presence", event: "left", guestId: "guest-2" });
+    expect(store.getState().cursors.has("guest-2")).toBe(false);
+    expect(store.getState().cursorMotion.has("guest-2")).toBe(false);
+
+    // Ephemeral across snapshots too: a reconnect gap must not leave a stale
+    // sample pulling interpolation toward a pre-disconnect position.
+    store.applyCursor({ type: "cursor", guestId: "guest-3", x: 1, y: 2 });
+    store.applySnapshot(emptySnapshot());
+    expect(store.getState().cursorMotion.size).toBe(0);
+  });
+
   it("converges a released group to its carried rest position, clears the holder and any motion sample", () => {
     const clock = new FakeClock();
     const store = new BoardStore(clock);

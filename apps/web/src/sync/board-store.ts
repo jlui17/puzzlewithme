@@ -38,6 +38,7 @@ function initialState(): BoardState {
     scoreboard: { players: [], progress: { placedPieces: 0, totalPieces: 0 } },
     cursors: new Map(),
     motion: new Map(),
+    cursorMotion: new Map(),
     completion: null,
   };
 }
@@ -108,6 +109,7 @@ export class BoardStore {
     // dropping them avoids showing stale positions after a reconnect gap.
     this.state.cursors = new Map();
     this.state.motion = new Map();
+    this.state.cursorMotion = new Map();
     this.notify();
   }
 
@@ -213,8 +215,21 @@ export class BoardStore {
     }
   }
 
+  /**
+   * A remote player's periodic cursor ping (~10 Hz, see SyncClient's
+   * CURSOR_INTERVAL_MS). Records a motion sample alongside the raw position,
+   * mirroring applyGroupMoved, so the renderer interpolates between pings
+   * instead of snapping the pointer to each one (FR-17 renders cursors live;
+   * NFR-2 requires motion look continuous, not teleporting).
+   */
   applyCursor(msg: CursorBroadcastMessage): void {
     if (msg.guestId === this.state.localGuestId) return;
+    const now = this.clock.now();
+    const previous = this.state.cursorMotion.get(msg.guestId)?.current ?? null;
+    this.state.cursorMotion.set(msg.guestId, {
+      current: { position: { x: msg.x, y: msg.y }, timestamp: now },
+      previous,
+    });
     this.state.cursors.set(msg.guestId, { guestId: msg.guestId, x: msg.x, y: msg.y });
     this.notify();
   }
@@ -228,6 +243,7 @@ export class BoardStore {
         // Presence tracks who's *here*; the score entry persists (FR-22/FR-24).
         this.state.players.delete(msg.guestId);
         this.state.cursors.delete(msg.guestId);
+        this.state.cursorMotion.delete(msg.guestId);
         break;
       case "renamed": {
         const player = this.state.players.get(msg.guestId);

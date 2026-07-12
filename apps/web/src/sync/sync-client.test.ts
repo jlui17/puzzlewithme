@@ -195,20 +195,85 @@ describe("SyncClient throttle (fake time)", () => {
     h.client.dragTo(99, 99);
     expect(socket.sentOfType("move")).toHaveLength(2);
   });
+});
 
-  it("emits one cursor per 15 Hz window", () => {
+describe("SyncClient cursor ping (fixed periodic tick)", () => {
+  it("sends only on the tick, carrying the latest position", () => {
     const h = makeHarness();
     const socket = connectAndSync(h);
 
-    for (let i = 0; i < 10; i++) {
-      h.clock.advance(1);
-      h.client.moveCursor(i, i);
-    }
+    // Many mousemoves before the tick fires => nothing sent yet.
+    for (let i = 0; i < 10; i++) h.client.moveCursor(i, i);
+    expect(socket.sentOfType("cursor")).toHaveLength(0);
+
+    // The tick fires => one send with the newest position, older ones dropped.
+    h.scheduler.runNext();
+    expect(socket.sentOfType("cursor")).toEqual([{ type: "cursor", x: 9, y: 9 }]);
+
+    h.client.moveCursor(20, 30);
+    h.scheduler.runNext();
+    expect(socket.sentOfType("cursor")).toEqual([
+      { type: "cursor", x: 9, y: 9 },
+      { type: "cursor", x: 20, y: 30 },
+    ]);
+  });
+
+  it("skips ticks while the position is unchanged", () => {
+    const h = makeHarness();
+    const socket = connectAndSync(h);
+
+    h.client.moveCursor(5, 5);
+    h.scheduler.runNext();
     expect(socket.sentOfType("cursor")).toHaveLength(1);
 
-    h.clock.advance(100);
+    // Idle pointer: further ticks send nothing, including a same-position move.
+    h.scheduler.runNext();
     h.client.moveCursor(5, 5);
+    h.scheduler.runNext();
+    expect(socket.sentOfType("cursor")).toHaveLength(1);
+
+    h.client.moveCursor(6, 5);
+    h.scheduler.runNext();
     expect(socket.sentOfType("cursor")).toHaveLength(2);
+  });
+
+  it("schedules ticks at the fixed cursor interval", () => {
+    const h = makeHarness();
+    connectAndSync(h);
+    // The timer pending after sync is the cursor tick; 100 ms = 10 Hz.
+    expect(h.scheduler.pending).toBe(1);
+    expect(h.scheduler.lastDelay()).toBe(100);
+    h.scheduler.runNext();
+    expect(h.scheduler.lastDelay()).toBe(100); // rescheduled at the same rate
+  });
+
+  it("pauses across a disconnect and resends the held position after resync", () => {
+    const h = makeHarness();
+    const socket1 = connectAndSync(h);
+    h.client.moveCursor(5, 5);
+    h.scheduler.runNext();
+    expect(socket1.sentOfType("cursor")).toHaveLength(1);
+
+    socket1.drop();
+    // Only the reconnect timer remains: the cursor tick stopped with the socket.
+    expect(h.scheduler.pending).toBe(1);
+    h.scheduler.runNext();
+    const socket2 = h.sockets.at(-1)!;
+    socket2.open();
+    socket2.receive({ type: "joined", identity: { id: "me", name: "Me", color: "#fff", placedCount: 0 }, resumeToken: "t" });
+    socket2.receive(snapshot());
+
+    // Same position as before the drop, but a fresh connection: resent anyway
+    // so the new session's peers see it.
+    h.scheduler.runNext();
+    expect(socket2.sentOfType("cursor")).toEqual([{ type: "cursor", x: 5, y: 5 }]);
+  });
+
+  it("stops ticking for good on close()", () => {
+    const h = makeHarness();
+    connectAndSync(h);
+    h.client.close();
+    expect(h.scheduler.pending).toBe(0);
   });
 });
 

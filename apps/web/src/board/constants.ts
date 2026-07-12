@@ -59,10 +59,22 @@ export const WHEEL_ZOOM_RATE = 0.0015;
 export const PAN_OVERSCROLL_PX = 260;
 
 /**
- * Render-time delay for interpolating remote motion, in ms. Remote holders relay
- * at 30 Hz (~33 ms/sample), so rendering ~100 ms in the past almost always
- * leaves the two newest samples bracketing the render time, giving jitter-free
- * lerp instead of extrapolation. 100 ms is well inside NFR-2's 200 ms budget.
- * Guessed from the 33 ms sample gap plus typical network jitter, not measured.
+ * Render-time delay for interpolating remotely-held group motion, in ms.
+ * Remote holders relay at 30 Hz (~33 ms/sample), so rendering ~100 ms in the
+ * past almost always leaves the two newest samples bracketing the render time,
+ * giving jitter-free lerp instead of extrapolation. 100 ms is well inside
+ * NFR-2's 200 ms budget. Guessed from the 33 ms sample gap plus typical
+ * network jitter, not measured.
  */
 export const INTERP_DELAY_MS = 100;
+
+/**
+ * Render-time delay for interpolating remote cursors, in ms. Cursors ping at
+ * 10 Hz (SyncClient's CURSOR_INTERVAL_MS, 100 ms), so this must exceed one
+ * ping interval or every slightly-late ping stalls the pointer at its last
+ * sample and then jumps. 1.5 intervals is the usual margin for interpolating
+ * a fixed-rate snapshot stream: half an interval absorbs network jitter, and
+ * the cost is only added display latency on a presence pointer (no
+ * correctness rides on it). Chosen by that convention, not measured.
+ */
+export const CURSOR_INTERP_DELAY_MS = 150;

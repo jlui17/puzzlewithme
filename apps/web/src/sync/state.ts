@@ -47,12 +47,14 @@ export interface MotionSample {
 }
 
 /**
- * Motion smoothing support for a remotely-held group (deliverable 3): the
- * latest relayed target plus the previous sample, timestamped on the local
- * clock. The renderer interpolates `previous`→`current` over the sample gap so
- * relayed 30 Hz motion looks continuous (NFR-2); this module never renders.
+ * Motion smoothing support (deliverable 3, extended to cursors): the latest
+ * relayed target plus the previous sample, timestamped on the local clock, for
+ * either a remotely-held group or another player's cursor. The renderer
+ * interpolates `previous`→`current` over the sample gap so relayed motion
+ * looks continuous (NFR-2) at either source's send rate; this module never
+ * renders.
  */
-export interface GroupMotion {
+export interface MotionState {
   current: MotionSample;
   previous: MotionSample | null;
 }
@@ -82,8 +84,10 @@ export interface BoardState {
   /** Authoritative scores + room progress (FR-20); the single source for counts. */
   scoreboard: Scoreboard;
   cursors: Map<string, RemoteCursor>;
-  /** Interpolation samples for remotely-held groups only (deliverable 3). */
-  motion: Map<string, GroupMotion>;
+  /** Interpolation samples for remotely-held groups (deliverable 3). */
+  motion: Map<string, MotionState>;
+  /** Interpolation samples for other players' cursors, keyed by guest id (mirrors `motion`). */
+  cursorMotion: Map<string, MotionState>;
   /** Set once on the completion event (§7.6); null while playing. */
   completion: { totalActiveSolvingTimeMs: number } | null;
 }
