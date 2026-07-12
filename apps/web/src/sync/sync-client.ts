@@ -108,6 +108,17 @@ export class SyncClient {
   /** Clock time of the last frame received from the server; the heartbeat measures silence against it. */
   private lastInboundAt = 0;
 
+  /**
+   * Desync diagnostics read by the ?debug=1 overlay: per-type counts of every
+   * server message applied, plus receive timestamps. Pure bookkeeping — never
+   * read by sync logic itself.
+   */
+  readonly debugStats: { received: Record<string, number>; lastInboundAt: number; lastSnapResultAt: number } = {
+    received: {},
+    lastInboundAt: 0,
+    lastSnapResultAt: 0,
+  };
+
   /** Latest known local cursor position; relayed by cursorTick, not on arrival. */
   private pendingCursor: Vec2 | null = null;
   /** The position last actually sent, to skip a tick when nothing changed. */
@@ -293,6 +304,10 @@ export class SyncClient {
     // Any well-formed frame proves the receive path is alive; the heartbeat
     // watchdog measures silence from here.
     this.lastInboundAt = this.config.clock.now();
+
+    this.debugStats.received[msg.type] = (this.debugStats.received[msg.type] ?? 0) + 1;
+    this.debugStats.lastInboundAt = this.lastInboundAt;
+    if (msg.type === "snap_result") this.debugStats.lastSnapResultAt = this.lastInboundAt;
 
     switch (msg.type) {
       case "joined":

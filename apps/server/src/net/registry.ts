@@ -197,6 +197,12 @@ export class RoomRegistry {
       conn.send(errorFor(mutationReasonToCode(result.reason)));
       return;
     }
+    // Desync diagnostics: one line per placement naming every connection the
+    // snap_result went to, so a report of "player X never saw player Y's
+    // pieces" can be checked against what the server actually fanned out.
+    console.log(
+      `[room ${roomId}] snap_result group=${result.result.group.id} by=${playerId} recipients=${room.connections.size}`,
+    );
     this.broadcast(room, result.result);
     if (result.completion !== null) {
       this.clearCheckpoint(room);

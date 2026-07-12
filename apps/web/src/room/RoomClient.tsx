@@ -254,6 +254,61 @@ function RoomLive({ settings }: { settings: RoomSettings }) {
           onClose={() => setStatsDismissed(true)}
         />
       )}
+
+      <DebugOverlay sync={sync} />
+    </div>
+  );
+}
+
+/**
+ * Desync diagnostics, rendered only with ?debug=1 in the URL (or
+ * localStorage pwm:debug = "1"): live counts of every server message this
+ * client received, plus seconds since the last frame / last snap_result.
+ * Exists so a player on a device with no dev console (mobile Safari) can
+ * screenshot exactly what their client did and didn't receive.
+ */
+function DebugOverlay({ sync }: { sync: SyncClient }) {
+  const [enabled, setEnabled] = useState(false);
+  const [, forceRender] = useState(0);
+
+  useEffect(() => {
+    const on =
+      new URLSearchParams(window.location.search).has("debug") ||
+      (() => {
+        try {
+          return localStorage.getItem("pwm:debug") === "1";
+        } catch {
+          return false;
+        }
+      })();
+    setEnabled(on);
+    if (!on) return;
+    // 500 ms poll: cheap enough to be invisible, fast enough that "did a
+    // message just arrive" is answerable while watching the screen.
+    const t = setInterval(() => forceRender((n) => n + 1), 500);
+    return () => clearInterval(t);
+  }, []);
+
+  if (!enabled) return null;
+  const stats = sync.debugStats;
+  const state = sync.getState();
+  const now = Date.now();
+  const age = (ts: number): string => (ts === 0 ? "never" : `${((now - ts) / 1000).toFixed(0)}s ago`);
+  const counts = Object.entries(stats.received)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([type, n]) => `${type}:${n}`)
+    .join(" ");
+  return (
+    <div className="debug-overlay">
+      <div>conn={state.connection} me={state.localGuestId ?? "-"}</div>
+      <div>rx {counts || "(nothing)"}</div>
+      <div>
+        last frame {age(stats.lastInboundAt)} · last snap_result {age(stats.lastSnapResultAt)}
+      </div>
+      <div>
+        groups={state.groups.size} locked={[...state.groups.values()].filter((g) => g.locked).length} players=
+        {state.players.size}
+      </div>
     </div>
   );
 }

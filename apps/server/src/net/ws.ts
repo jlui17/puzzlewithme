@@ -34,6 +34,14 @@ export interface WebSocketServerOptions {
   heartbeatIntervalMs?: number;
 }
 
+// Monotonic short connection id for log correlation; resets per process,
+// which is fine since logs are read per server run.
+let connCounter = 0;
+function nextConnId(): string {
+  connCounter += 1;
+  return `c${connCounter}`;
+}
+
 function rawDataToString(data: RawData): string {
   if (typeof data === "string") return data;
   if (Array.isArray(data)) return Buffer.concat(data).toString("utf8");
@@ -62,6 +70,7 @@ export function attachWebSocketServer(
   const heartbeat = setInterval(() => {
     for (const ws of wss.clients) {
       if (!alive.has(ws)) {
+        console.log("[ws] reaping unresponsive socket (missed ping)");
         ws.terminate();
         continue;
       }
@@ -88,9 +97,21 @@ export function attachWebSocketServer(
     alive.add(ws);
     ws.on("pong", () => alive.add(ws));
 
+    // Diagnostics for the placed-pieces desync reports: a short per-connection
+    // id ties join/close/drop logs together, and droppedSends counts the one
+    // silent failure point in the fan-out — send() skipping a message because
+    // the socket left OPEN without close having fired yet.
+    const connId = nextConnId();
+    let droppedSends = 0;
+
     const conn: RoomConnection = {
       send: (message) => {
-        if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(message));
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify(message));
+          return;
+        }
+        droppedSends += 1;
+        console.warn(`[ws ${connId}] dropped send (readyState=${ws.readyState}) type=${message.type} total=${droppedSends}`);
       },
     };
 
@@ -144,6 +165,7 @@ export function attachWebSocketServer(
         state = "joined";
         roomId = message.roomId;
         playerId = outcome.playerId;
+        console.log(`[ws ${connId}] joined room=${roomId} player=${playerId} userId=${message.userId ?? "-"}`);
         return;
       }
 
@@ -181,8 +203,9 @@ export function attachWebSocketServer(
       });
     });
 
-    ws.on("close", () => {
+    ws.on("close", (code: number) => {
       if (state === "joined" && roomId !== null && playerId !== null) {
+        console.log(`[ws ${connId}] closed code=${code} room=${roomId} player=${playerId} droppedSends=${droppedSends}`);
         registry.leave(conn, roomId, playerId);
       }
     });
