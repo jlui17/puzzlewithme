@@ -147,7 +147,7 @@ describe("full-stack e2e smoke test", () => {
     const imageBytes = await makeSquareJpeg(1000);
     const form = new FormData();
     form.set("image", new Blob([imageBytes], { type: "image/jpeg" }), "photo.jpg");
-    form.set("tier", "100");
+    form.set("pieces", "100");
     const createRes = await fetch(`${baseUrl}/api/rooms`, { method: "POST", body: form });
     expect(createRes.status).toBe(201);
     const created = await json(createRes);

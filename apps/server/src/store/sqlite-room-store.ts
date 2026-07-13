@@ -3,7 +3,7 @@ import { dirname } from "node:path";
 import Database from "better-sqlite3";
 import type { RoomSettings } from "@puzzlewithme/shared";
 import type { RoomDeviations, SerializedRoomState } from "../engine/types.js";
-import { emptyRoomState, type RoomStore, type UserRoomSummary } from "./room-store.js";
+import { emptyRoomState, type RoomStore, type UserImageSummary, type UserRoomSummary } from "./room-store.js";
 
 /** SQLite has no unique_violation code; better-sqlite3 throws this message for a PK collision. */
 const CONSTRAINT_ERROR = "SQLITE_CONSTRAINT_PRIMARYKEY";
@@ -18,25 +18,21 @@ export interface SqliteRoomStoreOptions {
 }
 
 /**
- * SQLite-backed RoomStore (§6.1.3): the zero-setup durable default (no
- * external database to install for local dev/self-host). Mirrors
- * PostgresRoomStore's table shape (rooms: id, settings, state, status,
- * created_at/updated_at) but stores the two JSON columns as TEXT — SQLite has
- * no native JSONB type, so settings/state are JSON.stringify'd on write and
- * JSON.parse'd on read here instead of relying on driver-level
- * serialization like node-postgres does for JSONB.
+ * SQLite-backed RoomStore (§6.1.3): the durable store for both local dev and
+ * production (no external database to install or operate). Two JSON columns
+ * stored as TEXT — SQLite has no native JSONB type, so settings/state are
+ * JSON.stringify'd on write and JSON.parse'd on read.
  *
  * better-sqlite3's API is synchronous; every method below just wraps a sync
  * call in an already-resolved Promise to satisfy the async RoomStore
- * interface, so callers can't tell this store apart from Postgres by timing.
+ * interface, which keeps the door open for a network-backed store.
  */
 export class SqliteRoomStore implements RoomStore {
   private readonly db: Database.Database;
 
   constructor(options: SqliteRoomStoreOptions) {
     // better-sqlite3 doesn't create missing parent directories for a file
-    // path (unlike ":memory:", which needs none); Postgres has no analogous
-    // step since its data directory always predates any connection.
+    // path (":memory:" needs none).
     if (options.path !== ":memory:") {
       mkdirSync(dirname(options.path), { recursive: true });
     }
@@ -65,10 +61,18 @@ export class SqliteRoomStore implements RoomStore {
         room_id TEXT NOT NULL,
         user_id TEXT NOT NULL,
         created_by_user INTEGER NOT NULL DEFAULT 0,
+        name TEXT,
         PRIMARY KEY (room_id, user_id)
       )
     `);
     this.db.exec(`CREATE INDEX IF NOT EXISTS room_members_user_id ON room_members (user_id)`);
+    // Databases created before the per-user room name existed lack the column
+    // (CREATE TABLE IF NOT EXISTS won't add it). SQLite has no ADD COLUMN IF
+    // NOT EXISTS, so probe the schema instead of catching a duplicate error.
+    const memberColumns = this.db.prepare(`PRAGMA table_info(room_members)`).all() as Array<{ name: string }>;
+    if (!memberColumns.some((c) => c.name === "name")) {
+      this.db.exec(`ALTER TABLE room_members ADD COLUMN name TEXT`);
+    }
     // App-wide user attributes keyed by the persistent anonymous userId. Today
     // just the display name; the natural place for future sign-up fields.
     this.db.exec(`
@@ -77,12 +81,28 @@ export class SqliteRoomStore implements RoomStore {
         display_name TEXT NOT NULL
       )
     `);
+    // Upload gallery: who uploaded which image (id = the ImageStore key).
+    // width/height are the ORIGINAL upload's dimensions (see UserImageSummary
+    // for why). No FK from rooms' imageRef — it lives inside the settings
+    // JSON, and a deleted gallery row must not affect the rooms that still
+    // render the image.
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS images (
+        id TEXT PRIMARY KEY,
+        owner_user_id TEXT NOT NULL,
+        width INTEGER NOT NULL,
+        height INTEGER NOT NULL,
+        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+      )
+    `);
+    this.db.exec(`CREATE INDEX IF NOT EXISTS images_owner_user_id ON images (owner_user_id)`);
   }
 
   async create(settings: RoomSettings): Promise<SerializedRoomState> {
     const state = emptyRoomState(settings);
-    // Mirrors PostgresRoomStore.create's rest-destructuring so both derive
-    // the stored `deviations` payload the same way.
+    // Same rest-destructuring as save() so both derive the stored
+    // `deviations` payload the same way and can't drift if RoomDeviations
+    // grows a field.
     const { settings: _settings, ...deviations } = state;
     try {
       this.db
@@ -139,7 +159,7 @@ export class SqliteRoomStore implements RoomStore {
       >(
         `SELECT r.settings AS settings, r.state AS state, r.status AS status,
                 r.created_at AS created_at, r.updated_at AS updated_at,
-                m.created_by_user AS created_by_user
+                m.created_by_user AS created_by_user, m.name AS name
          FROM room_members m
          JOIN rooms r ON r.id = m.room_id
          WHERE m.user_id = ?
@@ -152,6 +172,7 @@ export class SqliteRoomStore implements RoomStore {
       created_at: string;
       updated_at: string;
       created_by_user: number;
+      name: string | null;
     }>;
     return rows.map((row) => {
       const settings = JSON.parse(row.settings) as RoomSettings;
@@ -164,8 +185,16 @@ export class SqliteRoomStore implements RoomStore {
         lastActiveAt: row.updated_at,
         placedPieces: state.creditedPieces.length,
         totalPieces: settings.rows * settings.cols,
+        name: row.name,
       };
     });
+  }
+
+  async setRoomName(roomId: string, userId: string, name: string | null): Promise<boolean> {
+    const result = this.db
+      .prepare(`UPDATE room_members SET name = ? WHERE room_id = ? AND user_id = ?`)
+      .run(name, roomId, userId);
+    return result.changes > 0;
   }
 
   async getUserDisplayName(userId: string): Promise<string | null> {
@@ -182,6 +211,43 @@ export class SqliteRoomStore implements RoomStore {
          ON CONFLICT (user_id) DO UPDATE SET display_name = excluded.display_name`,
       )
       .run(userId, displayName);
+  }
+
+  async recordImage(imageId: string, ownerUserId: string, width: number, height: number): Promise<void> {
+    try {
+      this.db
+        .prepare(`INSERT INTO images (id, owner_user_id, width, height) VALUES (?, ?, ?, ?)`)
+        .run(imageId, ownerUserId, width, height);
+    } catch (err) {
+      if (isPrimaryKeyViolation(err)) {
+        throw new Error(`image ${imageId} already exists`);
+      }
+      throw err;
+    }
+  }
+
+  async listUserImages(userId: string): Promise<UserImageSummary[]> {
+    const rows = this.db
+      .prepare<[string], { id: string; created_at: string; width: number; height: number }>(
+        `SELECT id, created_at, width, height FROM images WHERE owner_user_id = ? ORDER BY created_at DESC`,
+      )
+      .all(userId);
+    return rows.map((row) => ({ imageId: row.id, createdAt: row.created_at, width: row.width, height: row.height }));
+  }
+
+  async getUserImage(imageId: string, userId: string): Promise<UserImageSummary | null> {
+    const row = this.db
+      .prepare<[string, string], { id: string; created_at: string; width: number; height: number }>(
+        `SELECT id, created_at, width, height FROM images WHERE id = ? AND owner_user_id = ?`,
+      )
+      .get(imageId, userId);
+    if (row === undefined) return null;
+    return { imageId: row.id, createdAt: row.created_at, width: row.width, height: row.height };
+  }
+
+  async deleteUserImage(imageId: string, userId: string): Promise<boolean> {
+    const result = this.db.prepare(`DELETE FROM images WHERE id = ? AND owner_user_id = ?`).run(imageId, userId);
+    return result.changes > 0;
   }
 
   /** Closes the underlying file handle; call once on shutdown (or test teardown). */

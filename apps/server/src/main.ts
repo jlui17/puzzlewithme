@@ -1,5 +1,5 @@
 // Must run before any other import touches process.env (S3_BUCKET,
-// AWS_*, DATABASE_URL, etc. below): a plain side-effecting import, not
+// AWS_*, SQLITE_PATH, etc. below): a plain side-effecting import, not
 // --env-file/--env-file-if-exists, since the latter either errors on a
 // missing .env (older --env-file) or needs Node >=22.9 (--env-file-if-exists)
 // — neither survives across this repo's supported engines.node (>=20) and a
@@ -12,7 +12,6 @@ import { type ImageStore } from "./images/image-store.js";
 import { LocalDiskImageStore } from "./images/local-disk-image-store.js";
 import { S3ImageStore } from "./images/s3-image-store.js";
 import { type RoomStore } from "./store/room-store.js";
-import { PostgresRoomStore } from "./store/postgres-room-store.js";
 import { SqliteRoomStore } from "./store/sqlite-room-store.js";
 
 // The web client defaults to localhost:3001, so this port is pinned; PORT only
@@ -26,11 +25,6 @@ const DEFAULT_PORT = 3001;
 const DEFAULT_SQLITE_PATH = "./data/puzzlewithme.db";
 
 function buildRoomStore(): RoomStore {
-  const databaseUrl = process.env["DATABASE_URL"];
-  if (databaseUrl !== undefined && databaseUrl !== "") {
-    console.log("room store: Postgres (DATABASE_URL set)");
-    return new PostgresRoomStore({ connectionString: databaseUrl });
-  }
   const sqlitePath = process.env["SQLITE_PATH"] ?? DEFAULT_SQLITE_PATH;
   // SQLITE_PATH=":memory:" doubles as the in-memory escape hatch (e.g. tests
   // that want RoomStore's real SQL/JSON round-trip without a file) — no

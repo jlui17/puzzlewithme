@@ -14,7 +14,9 @@ import { z } from "zod";
 // 40 chars comfortably fits a real name or nickname without wrapping and
 // bounds the payload size for a value the server persists per guest (FR-22).
 // Not measured against real usage yet — revisit if legitimate names get clipped.
-const MAX_NAME_LENGTH = 40;
+// Exported: the HTTP profile endpoint and the main-menu name input enforce
+// the same cap as the in-room rename this schema validates.
+export const MAX_NAME_LENGTH = 40;
 
 // Room ids are the unguessable access credential (FR-5); 128 chars is far
 // beyond any reasonable id-generator output and just guards against a

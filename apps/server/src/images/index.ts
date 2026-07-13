@@ -6,6 +6,8 @@ export { LocalDiskImageStore } from "./local-disk-image-store.js";
 export { S3ImageStore, type S3ClientLike, type S3ImageStoreOptions } from "./s3-image-store.js";
 export {
   processUploadedImage,
+  validatePieceGrid,
+  type PieceGridResult,
   type ProcessedImage,
   type ProcessImageOptions,
   type ProcessImageResult,

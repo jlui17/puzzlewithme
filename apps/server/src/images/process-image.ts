@@ -1,4 +1,4 @@
-import { deriveGrid, type Grid, type Tier } from "@puzzlewithme/geometry";
+import { deriveGrid, type Grid } from "@puzzlewithme/geometry";
 import sharp from "sharp";
 import { ALLOWED_IMAGE_FORMATS, MAX_DIMENSION_PX, MAX_UPLOAD_BYTES, MIN_CELL_PX } from "./constants.js";
 import { formatAwareWebpEncoder } from "./format-aware-webp-encoder.js";
@@ -8,6 +8,13 @@ export interface ProcessedImage {
   bytes: Buffer;
   width: number;
   height: number;
+  /**
+   * The upload's pre-downscale dimensions — what `grid` was validated
+   * against. Persisted with the gallery record so re-creating a room from
+   * this image later validates a new piece count against the same numbers.
+   */
+  originalWidth: number;
+  originalHeight: number;
   /** Whatever contentType the encoder reports — not pinned to webp, since a swapped-in ImageEncoder may pick a different output format. */
   contentType: string;
   /**
@@ -36,6 +43,34 @@ export interface ProcessImageOptions {
   encoder?: ImageEncoder;
 }
 
+export type PieceGridResult = { ok: true; grid: Grid } | { ok: false; reason: string };
+
+/**
+ * Derive the grid for a target piece count and check the image has enough
+ * pixels for it (FR-1, FR-3): every cell must be at least MIN_CELL_PX on its
+ * short side. `width`/`height` must be the ORIGINAL upload's dimensions (see
+ * the validation comment in processUploadedImage). Shared by the upload path
+ * and create-from-gallery so a piece count is judged identically whether the
+ * image arrives fresh or from the gallery.
+ */
+export function validatePieceGrid(targetPieces: number, width: number, height: number): PieceGridResult {
+  const grid = deriveGrid(targetPieces, width, height);
+  const minCellPx = Math.min(width / grid.cols, height / grid.rows);
+  if (minCellPx < MIN_CELL_PX) {
+    const requiredWidth = Math.ceil(MIN_CELL_PX * grid.cols);
+    const requiredHeight = Math.ceil(MIN_CELL_PX * grid.rows);
+    return {
+      ok: false,
+      reason:
+        `image resolution too low for ${targetPieces} pieces: pieces would render from ` +
+        `~${Math.floor(minCellPx)}px, need at least ${MIN_CELL_PX}px ` +
+        `(image is ${width}x${height}, need at least ${requiredWidth}x${requiredHeight} ` +
+        `for a ${grid.rows}x${grid.cols} grid)`,
+    };
+  }
+  return { ok: true, grid };
+}
+
 /**
  * Validate and normalize an uploaded room image (FR-1, FR-2, §7.1). Always
  * re-encodes via the injected ImageEncoder (default: formatAwareWebpEncoder)
@@ -51,7 +86,7 @@ export interface ProcessImageOptions {
  */
 export async function processUploadedImage(
   bytes: Buffer,
-  tier: Tier,
+  targetPieces: number,
   options: ProcessImageOptions = {},
 ): Promise<ProcessImageResult> {
   const encoder = options.encoder ?? formatAwareWebpEncoder;
@@ -88,20 +123,11 @@ export async function processUploadedImage(
   // This grid is returned to the caller (see ProcessedImage.grid) rather
   // than re-derived from the processed dimensions, so the grid a room is
   // created with is always exactly the grid this validation ran against.
-  const grid = deriveGrid(tier, originalWidth, originalHeight);
-  const minCellPx = Math.min(originalWidth / grid.cols, originalHeight / grid.rows);
-  if (minCellPx < MIN_CELL_PX) {
-    const requiredWidth = Math.ceil(MIN_CELL_PX * grid.cols);
-    const requiredHeight = Math.ceil(MIN_CELL_PX * grid.rows);
-    return {
-      ok: false,
-      reason:
-        `image resolution too low for the ${tier}-piece tier: pieces would render from ` +
-        `~${Math.floor(minCellPx)}px, need at least ${MIN_CELL_PX}px ` +
-        `(image is ${originalWidth}x${originalHeight}, need at least ${requiredWidth}x${requiredHeight} ` +
-        `for a ${grid.rows}x${grid.cols} grid)`,
-    };
+  const gridResult = validatePieceGrid(targetPieces, originalWidth, originalHeight);
+  if (!gridResult.ok) {
+    return gridResult;
   }
+  const { grid } = gridResult;
 
   // fit: "inside" + withoutEnlargement preserves aspect ratio and never
   // upscales a smaller-than-cap image (FR-2 is a ceiling, not a target).
@@ -138,6 +164,6 @@ export async function processUploadedImage(
 
   return {
     ok: true,
-    image: { bytes: data, width, height, contentType, grid },
+    image: { bytes: data, width, height, originalWidth, originalHeight, contentType, grid },
   };
 }

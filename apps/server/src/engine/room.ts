@@ -142,11 +142,14 @@ export class RoomEngine {
    * its userId so later joins by that userId resume it. Completed rooms accept
    * joins — they're viewable forever (FR-25) — but no longer accrue solving time.
    *
-   * `displayName` is the user's app-wide name (users table): a minted identity
-   * uses it instead of a generated name, and a resumed identity syncs to it so
-   * a rename made in another room follows the user here. The sync happens
-   * before the snapshot/joined messages are built, so every client sees the
-   * current name without a separate rename broadcast.
+   * `displayName` is the user's app-wide name (users table, minted at first
+   * server contact — see ensureUserDisplayName): a minted identity uses it,
+   * and a resumed identity syncs to it so a rename made anywhere follows the
+   * user here. The sync happens before the snapshot/joined messages are
+   * built, so every client sees the current name without a separate rename
+   * broadcast. The per-room generated fallback below only fires for guests
+   * with no persistent userId (storage-blocked browsers) or when the profile
+   * read failed.
    */
   join(resumeToken?: string | null, userId?: string | null, displayName?: string | null): JoinResult {
     let resumedId = resumeToken != null ? this.tokenToGuest.get(resumeToken) : undefined;

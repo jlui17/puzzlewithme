@@ -2,8 +2,8 @@ import { S3Client } from "@aws-sdk/client-s3";
 import { describe, expect, it } from "vitest";
 import { S3ImageStore } from "./s3-image-store.js";
 
-// Integration-only: needs a real bucket and credentials. Mirrors
-// postgres-room-store.test.ts's skipIf pattern for the same reason (CI/local
+// Integration-only: needs a real bucket and credentials, so it skipIfs on
+// the env being present (CI/local
 // coverage of the ImageStore interface already comes from the unit tests
 // above against a fake client; this suite just confirms the real SDK calls
 // round-trip against S3).

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ROOM_CAP } from "./constants.js";
-import { CURSOR_COLORS, assignCursorColor, createNameGenerator } from "./names.js";
+import { CURSOR_COLORS, assignCursorColor, createNameGenerator, ensureUserDisplayName, randomName } from "./names.js";
 
 describe("createNameGenerator", () => {
   it("produces adjective+noun-suffix names", () => {
@@ -26,6 +26,29 @@ describe("createNameGenerator", () => {
       expect(taken.has(name)).toBe(false);
       taken.add(name);
     }
+  });
+});
+
+describe("randomName / ensureUserDisplayName", () => {
+  it("produces adjective+noun-suffix names without a seed", () => {
+    for (let i = 0; i < 50; i++) {
+      expect(randomName()).toMatch(/^[A-Z][a-z]+[A-Z][a-z]+-[A-Z][0-9]{2}$/);
+    }
+  });
+
+  it("mints and persists a name once, then returns the stored one", async () => {
+    const names = new Map<string, string>();
+    const store = {
+      getUserDisplayName: async (id: string) => names.get(id) ?? null,
+      setUserDisplayName: async (id: string, name: string) => void names.set(id, name),
+    };
+    const minted = await ensureUserDisplayName(store, "u1");
+    expect(minted).toMatch(/^[A-Z][a-z]+[A-Z][a-z]+-[A-Z][0-9]{2}$/);
+    expect(await ensureUserDisplayName(store, "u1")).toBe(minted);
+
+    names.set("u2", "Justin");
+    expect(await ensureUserDisplayName(store, "u2")).toBe("Justin");
+    expect(names.get("u1")).toBe(minted);
   });
 });
 

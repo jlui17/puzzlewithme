@@ -16,6 +16,12 @@ import {
 import { roomImageUrl, wsUrl } from "../config";
 import { CompletionOverlay, type Contribution } from "./CompletionOverlay";
 import { PlayersPanel, type PlayerView } from "./PlayersPanel";
+import { RoomMenu } from "./RoomMenu";
+
+const PANEL_COLLAPSED_KEY = "pwm:panelCollapsed";
+
+/** Below this, the players panel's default width covers too much of a phone-sized board. */
+const MOBILE_BREAKPOINT_PX = 640;
 
 const BoardCanvas = dynamic(() => import("./BoardCanvas").then((m) => m.BoardCanvas), {
   ssr: false,
@@ -143,6 +149,33 @@ function RoomLive({ settings }: { settings: RoomSettings }) {
   );
   const [statsDismissed, setStatsDismissed] = useState(false);
 
+  // Lazy initializer: reads the saved choice, falling back to a width-based
+  // default. Runs during SSR too (no "use client" boundary exempts the
+  // initial render), so window/localStorage must be guarded.
+  const [playersCollapsed, setPlayersCollapsed] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      const saved = localStorage.getItem(PANEL_COLLAPSED_KEY);
+      if (saved === "1") return true;
+      if (saved === "0") return false;
+    } catch {
+      // Storage can throw (private mode/disabled); fall through to the width default.
+    }
+    return window.innerWidth < MOBILE_BREAKPOINT_PX;
+  });
+
+  const togglePlayersCollapsed = useCallback(() => {
+    setPlayersCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(PANEL_COLLAPSED_KEY, next ? "1" : "0");
+      } catch {
+        // Best-effort persistence; a failed write just means the choice resets next visit.
+      }
+      return next;
+    });
+  }, []);
+
   // Resolved once on the client (localStorage is unavailable during SSR, where
   // loadOrCreateUserId returns null); not rendered into HTML, so no hydration
   // mismatch. This is the same browser's stable id across rooms/sessions.
@@ -231,13 +264,16 @@ function RoomLive({ settings }: { settings: RoomSettings }) {
         placed={panel.placed}
         total={panel.total}
         onRename={onRename}
+        collapsed={playersCollapsed}
       />
 
-      {completed && (
-        <button className="read-only-badge" onClick={() => setStatsDismissed(false)}>
-          Read-only · completed · show stats
-        </button>
-      )}
+      <RoomMenu
+        imageUrl={roomImageUrl(settings.roomId)}
+        playersCollapsed={playersCollapsed}
+        onTogglePlayers={togglePlayersCollapsed}
+        completed={completed}
+        onShowStats={() => setStatsDismissed(false)}
+      />
 
       {toast && (
         <div className="held-toast" key={toast.key} style={{ left: toast.x, top: toast.y }}>

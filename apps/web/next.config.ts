@@ -33,11 +33,11 @@ const nextConfig: NextConfig = {
    * and the WS host); only the transport changes.
    */
   async rewrites() {
-    return [
-      { source: "/api/rooms", destination: `${SERVER_ORIGIN}/api/rooms` },
-      { source: "/api/rooms/:path*", destination: `${SERVER_ORIGIN}/api/rooms/:path*` },
-      { source: "/api/users/:path*", destination: `${SERVER_ORIGIN}/api/users/:path*` },
-    ];
+    // One catch-all instead of per-route entries: the web app has no /api
+    // routes of its own, and enumerating server routes here already bit once
+    // (the gallery's /api/images was missed and thumbnails 404'd at this
+    // layer while every server-side test passed).
+    return [{ source: "/api/:path*", destination: `${SERVER_ORIGIN}/api/:path*` }];
   },
 };
 

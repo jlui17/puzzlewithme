@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { deriveGrid, type Tier } from "./index.js";
+import { deriveGrid, MAX_PIECE_COUNT, MIN_PIECE_COUNT } from "./index.js";
 
-const TIERS: Tier[] = [100, 250, 500, 1000];
+// The old fixed tiers plus arbitrary in-between requests the slider can now send.
+const TARGETS = [100, 250, 337, 550, 763, 1000];
 
 // width:height pairs covering square, landscape, portrait, and extreme.
 const ASPECTS: Array<{ name: string; w: number; h: number }> = [
@@ -12,10 +13,10 @@ const ASPECTS: Array<{ name: string; w: number; h: number }> = [
 ];
 
 describe("deriveGrid", () => {
-  for (const tier of TIERS) {
+  for (const target of TARGETS) {
     for (const { name, w, h } of ASPECTS) {
-      it(`keeps pieces near-square and count near tier (${tier}, ${name})`, () => {
-        const { rows, cols } = deriveGrid(tier, w, h);
+      it(`keeps pieces near-square and count near the request (${target}, ${name})`, () => {
+        const { rows, cols } = deriveGrid(target, w, h);
         expect(rows).toBeGreaterThanOrEqual(1);
         expect(cols).toBeGreaterThanOrEqual(1);
 
@@ -25,11 +26,15 @@ describe("deriveGrid", () => {
         expect(pieceAspect).toBeLessThan(Math.SQRT2);
 
         const count = rows * cols;
-        // Count stays within 15% of the requested tier (FR-3 allows it to differ).
-        expect(Math.abs(count - tier) / tier).toBeLessThanOrEqual(0.15);
+        // Count stays within 15% of the request (FR-3 allows it to differ).
+        expect(Math.abs(count - target) / target).toBeLessThanOrEqual(0.15);
       });
     }
   }
+
+  it("is deterministic for the same inputs (client preview must match server)", () => {
+    expect(deriveGrid(550, 1920, 1080)).toEqual(deriveGrid(550, 1920, 1080));
+  });
 
   it("orients the grid to the image (more cols when wider, more rows when taller)", () => {
     const wide = deriveGrid(500, 1920, 1080);
@@ -38,7 +43,14 @@ describe("deriveGrid", () => {
     expect(tall.rows).toBeGreaterThan(tall.cols);
   });
 
-  it("rejects non-positive dimensions", () => {
+  it("rejects non-positive dimensions and non-integer targets", () => {
     expect(() => deriveGrid(100, 0, 100)).toThrow();
+    expect(() => deriveGrid(100.5, 1000, 1000)).toThrow();
+    expect(() => deriveGrid(0, 1000, 1000)).toThrow();
+  });
+
+  it("exports sane product bounds", () => {
+    expect(MIN_PIECE_COUNT).toBeLessThan(MAX_PIECE_COUNT);
+    expect(MIN_PIECE_COUNT).toBeGreaterThan(0);
   });
 });

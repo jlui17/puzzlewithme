@@ -41,7 +41,7 @@ export type {
 
 export { createRng, hashSeed, shuffleInPlace, type Rng } from "./prng.js";
 
-export { deriveGrid, type Tier } from "./grid.js";
+export { deriveGrid, MAX_PIECE_COUNT, MIN_PIECE_COUNT } from "./grid.js";
 
 export {
   coordToPieceId,

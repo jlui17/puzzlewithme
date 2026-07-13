@@ -1,3 +1,4 @@
+import { randomInt } from "node:crypto";
 import { createRng } from "@puzzlewithme/geometry";
 import { NAME_SALT, ROOM_CAP } from "./constants.js";
 
@@ -49,6 +50,44 @@ export function createNameGenerator(seed: string): (taken: ReadonlySet<string>) 
     } while (taken.has(name));
     return name;
   };
+}
+
+/**
+ * One-off random guest name for a new user profile ("EerieAcorn-J93" style,
+ * same word lists as the per-room generator). Unseeded (crypto randomInt, not
+ * the room rng): a profile name belongs to a user, not a room, so there is no
+ * room seed to derive it from and no reproducibility requirement. No `taken`
+ * check either — ~2.7M combinations across a handful of users makes app-wide
+ * collisions merely cosmetic (names are display labels; identity is the uid).
+ */
+export function randomName(): string {
+  const pick = <T>(list: readonly T[]): T => list[randomInt(list.length)]!;
+  const suffix = `${String.fromCharCode(65 + randomInt(26))}${randomInt(10)}${randomInt(10)}`;
+  return `${pick(ADJECTIVES)}${pick(NOUNS)}-${suffix}`;
+}
+
+/**
+ * The user's app-wide display name, minting and persisting a random one on
+ * first touch. This is where a user's name is born — room joins and the
+ * profile endpoint both call it, so a name exists from the moment the server
+ * first sees a uid instead of being generated per room join. Typed
+ * structurally so the engine doesn't depend on the store module.
+ *
+ * Two concurrent first-touches can both mint (get/set is not atomic); last
+ * write wins, which only re-rolls a random name nobody has seen yet.
+ */
+export async function ensureUserDisplayName(
+  store: {
+    getUserDisplayName(userId: string): Promise<string | null>;
+    setUserDisplayName(userId: string, displayName: string): Promise<void>;
+  },
+  userId: string,
+): Promise<string> {
+  const existing = await store.getUserDisplayName(userId);
+  if (existing !== null) return existing;
+  const minted = randomName();
+  await store.setUserDisplayName(userId, minted);
+  return minted;
 }
 
 /**

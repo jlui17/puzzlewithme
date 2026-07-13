@@ -30,6 +30,7 @@ export {
   dropMessageSchema,
   grabMessageSchema,
   joinMessageSchema,
+  MAX_NAME_LENGTH,
   moveMessageSchema,
   renameMessageSchema,
 } from "./client-messages.js";

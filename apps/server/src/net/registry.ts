@@ -1,4 +1,5 @@
 import type { ErrorCode, ServerMessage } from "@puzzlewithme/shared";
+import { ensureUserDisplayName } from "../engine/names.js";
 import { RoomEngine } from "../engine/room.js";
 import type { MutationRejectionReason } from "../engine/types.js";
 import type { RoomStore } from "../store/room-store.js";
@@ -99,16 +100,16 @@ export class RoomRegistry {
     const room = await this.getOrLoad(roomId);
     if (room === null) return { ok: false, reason: "room_not_found" };
 
-    // The user's app-wide display name (set on any prior rename, in any room):
-    // a minted identity starts with it, a resumed one syncs to it. Read
-    // best-effort — a store failure degrades to the generated-name flow rather
-    // than failing the join.
+    // The user's app-wide display name: existing profile name, or one minted
+    // and persisted right here on the user's first-ever join (names live on
+    // the profile, not per room). Best-effort — a store failure degrades to
+    // the engine's per-room generated name rather than failing the join.
     let displayName: string | null = null;
     if (userId !== null) {
       try {
-        displayName = await this.store.getUserDisplayName(userId);
+        displayName = await ensureUserDisplayName(this.store, userId);
       } catch (err) {
-        console.error(`loading display name failed for user ${userId}`, err);
+        console.error(`ensuring display name failed for user ${userId}`, err);
       }
     }
 

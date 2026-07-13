@@ -6,19 +6,18 @@ import { emptyRoomState, type RoomStore } from "./room-store.js";
 
 /**
  * The RoomStore interface contract, exercised identically against every
- * implementation (InMemoryRoomStore always, PostgresRoomStore when
- * DATABASE_URL is set — see room-store.test.ts / postgres-room-store.test.ts).
+ * implementation (see room-store.test.ts / sqlite-room-store.test.ts).
  * Named *.test-suite.ts, not *.test.ts, so vitest's `src/**\/*.test.ts` glob
  * never collects it directly — it only runs when a real *.test.ts imports
  * and calls it.
  *
- * `getStore` is a thunk rather than an instance because Postgres needs an
- * async beforeAll (connect + migrate) to finish before the store exists;
- * InMemoryRoomStore just closes over an already-built instance.
+ * `getStore` is a thunk rather than an instance so a backend needing async
+ * setup (beforeAll) can finish before the store exists; InMemoryRoomStore
+ * just closes over an already-built instance.
  *
  * Every test mints its own roomId (randomUUID) so runs against a persistent
- * backend (Postgres) never collide with leftover rows from a prior run,
- * without needing shared setup/teardown to truncate the table.
+ * backend never collide with leftover rows from a prior run, without needing
+ * shared setup/teardown to truncate the table.
  */
 export function runRoomStoreContractTests(storeName: string, getStore: () => RoomStore): void {
   function settingsFor(roomId: string, overrides: Partial<RoomSettings> = {}): RoomSettings {
@@ -139,6 +138,54 @@ export function runRoomStoreContractTests(storeName: string, getStore: () => Roo
       const store = getStore();
       expect(await store.listUserRooms(`user-${randomUUID()}`)).toEqual([]);
     });
+
+    it("lists rooms with a null name until the user sets one, then round-trips and clears it", async () => {
+      const store = getStore();
+      const userId = `user-${randomUUID()}`;
+      const settings = settingsFor(randomUUID());
+      await store.create(settings);
+      await store.recordMembership(settings.roomId, userId, true);
+
+      expect((await store.listUserRooms(userId))[0]?.name).toBeNull();
+
+      expect(await store.setRoomName(settings.roomId, userId, "Beach trip")).toBe(true);
+      expect((await store.listUserRooms(userId))[0]?.name).toBe("Beach trip");
+
+      expect(await store.setRoomName(settings.roomId, userId, null)).toBe(true);
+      expect((await store.listUserRooms(userId))[0]?.name).toBeNull();
+    });
+
+    it("scopes the room name to the renaming user, not the room", async () => {
+      const store = getStore();
+      const alice = `user-${randomUUID()}`;
+      const bob = `user-${randomUUID()}`;
+      const settings = settingsFor(randomUUID());
+      await store.create(settings);
+      await store.recordMembership(settings.roomId, alice, true);
+      await store.recordMembership(settings.roomId, bob, false);
+
+      await store.setRoomName(settings.roomId, alice, "Alice's name");
+      expect((await store.listUserRooms(alice))[0]?.name).toBe("Alice's name");
+      expect((await store.listUserRooms(bob))[0]?.name).toBeNull();
+    });
+
+    it("refuses to name a room the user is not a member of", async () => {
+      const store = getStore();
+      const settings = settingsFor(randomUUID());
+      await store.create(settings);
+      expect(await store.setRoomName(settings.roomId, `user-${randomUUID()}`, "nope")).toBe(false);
+    });
+
+    it("keeps a set name across a later membership re-record (rejoin)", async () => {
+      const store = getStore();
+      const userId = `user-${randomUUID()}`;
+      const settings = settingsFor(randomUUID());
+      await store.create(settings);
+      await store.recordMembership(settings.roomId, userId, true);
+      await store.setRoomName(settings.roomId, userId, "Keeper");
+      await store.recordMembership(settings.roomId, userId, false); // rejoin
+      expect((await store.listUserRooms(userId))[0]?.name).toBe("Keeper");
+    });
   });
 
   describe(`${storeName} (display names)`, () => {
@@ -164,6 +211,56 @@ export function runRoomStoreContractTests(storeName: string, getStore: () => Roo
       await store.setUserDisplayName(b, "Bob");
       expect(await store.getUserDisplayName(a)).toBe("Alice");
       expect(await store.getUserDisplayName(b)).toBe("Bob");
+    });
+  });
+
+  describe(`${storeName} (image gallery)`, () => {
+    it("records an upload and lists it only for its owner", async () => {
+      const store = getStore();
+      const owner = `user-${randomUUID()}`;
+      const imageId = `img-${randomUUID()}`;
+      await store.recordImage(imageId, owner, 1920, 1080);
+
+      const images = await store.listUserImages(owner);
+      expect(images).toHaveLength(1);
+      expect(images[0]).toMatchObject({ imageId, width: 1920, height: 1080 });
+      expect(typeof images[0]?.createdAt).toBe("string");
+
+      expect(await store.listUserImages(`user-${randomUUID()}`)).toEqual([]);
+    });
+
+    it("rejects a duplicate imageId", async () => {
+      const store = getStore();
+      const imageId = `img-${randomUUID()}`;
+      await store.recordImage(imageId, `user-${randomUUID()}`, 800, 600);
+      await expect(store.recordImage(imageId, `user-${randomUUID()}`, 800, 600)).rejects.toThrow(/already exists/);
+    });
+
+    it("getUserImage is ownership-checked: null for an unknown id or another user's image", async () => {
+      const store = getStore();
+      const owner = `user-${randomUUID()}`;
+      const imageId = `img-${randomUUID()}`;
+      await store.recordImage(imageId, owner, 800, 600);
+
+      expect(await store.getUserImage(imageId, owner)).toMatchObject({ imageId, width: 800, height: 600 });
+      expect(await store.getUserImage(imageId, `user-${randomUUID()}`)).toBeNull();
+      expect(await store.getUserImage(`img-${randomUUID()}`, owner)).toBeNull();
+    });
+
+    it("deletes only an owned image, and only from the gallery listing", async () => {
+      const store = getStore();
+      const owner = `user-${randomUUID()}`;
+      const imageId = `img-${randomUUID()}`;
+      await store.recordImage(imageId, owner, 800, 600);
+
+      expect(await store.deleteUserImage(imageId, `user-${randomUUID()}`)).toBe(false);
+      expect(await store.listUserImages(owner)).toHaveLength(1);
+
+      expect(await store.deleteUserImage(imageId, owner)).toBe(true);
+      expect(await store.listUserImages(owner)).toEqual([]);
+      expect(await store.getUserImage(imageId, owner)).toBeNull();
+      // Idempotence at the caller's level: a second delete reports not-found.
+      expect(await store.deleteUserImage(imageId, owner)).toBe(false);
     });
   });
 }
