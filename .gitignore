@@ -14,3 +14,4 @@ data/
 next-env.d.ts
 .DS_Store
 coverage/
+.e2e/
