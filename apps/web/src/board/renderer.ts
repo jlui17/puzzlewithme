@@ -11,6 +11,7 @@ import {
 } from "./camera";
 import { CURSOR_INTERP_DELAY_MS, INTERP_DELAY_MS } from "./constants";
 import { pointInPolygon } from "./hit-test";
+import { currentTheme, type BoardTheme } from "../theme";
 
 /**
  * Owns the PixiJS scene and drives it straight from the sync store (React state
@@ -107,6 +108,8 @@ export class BoardRenderer {
     contextLost: 0,
     lastError: null,
   };
+  /** Snapshot of the active theme's board colors; refreshTheme() re-reads it. */
+  private theme: BoardTheme = currentTheme().board;
   camera: Camera;
 
   constructor(
@@ -153,18 +156,32 @@ export class BoardRenderer {
     return { width: this.app.screen.width, height: this.app.screen.height };
   }
 
-  /** Subtle frame outline + faint board-bounds rect on the dark table (FR-8). */
+  /** Subtle frame outline + faint board-bounds rect on the table (FR-8). */
   private drawFrame(): void {
     const { rows, cols } = this.puzzle;
     const b = boardBounds(rows, cols);
     this.frame.clear();
     this.frame
       .rect(b.minX, b.minY, b.maxX - b.minX, b.maxY - b.minY)
-      .fill({ color: 0x0b0e13, alpha: 0.6 });
+      .fill({ color: this.theme.well, alpha: this.theme.wellAlpha });
     this.frame
       .rect(0, 0, cols * CELL_SIZE, rows * CELL_SIZE)
       .fill({ color: 0xffffff, alpha: 0.02 })
-      .stroke({ width: 2, color: 0x3a4757, alpha: 0.9, alignment: 0.5 });
+      .stroke({ width: 2, color: this.theme.frameStroke, alpha: 0.9, alignment: 0.5 });
+  }
+
+  /** Re-reads the active theme and repaints everything themed in the scene. */
+  refreshTheme(): void {
+    this.theme = currentTheme().board;
+    this.drawFrame();
+    for (const node of this.cursors.values()) this.drawCursorLabelBg(node);
+  }
+
+  private drawCursorLabelBg(node: CursorNode): void {
+    node.labelBg
+      .clear()
+      .roundRect(9, 10, node.label.width + 10, node.label.height + 4, 8)
+      .fill({ color: this.theme.cursorLabelBg, alpha: 0.85 });
   }
 
   applyCamera(): void {
@@ -347,10 +364,7 @@ export class BoardRenderer {
       node.pointer.tint = color;
       if (node.label.text !== player.name) {
         node.label.text = player.name;
-        node.labelBg
-          .clear()
-          .roundRect(9, 10, node.label.width + 10, node.label.height + 4, 4)
-          .fill({ color: 0x161b22, alpha: 0.85 });
+        this.drawCursorLabelBg(node);
       }
       const pos = renderPosition(
         state.cursorMotion.get(cursor.guestId),

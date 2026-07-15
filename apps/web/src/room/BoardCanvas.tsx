@@ -10,6 +10,7 @@ import { buildPiecePolygons } from "../board/hit-test";
 import { InputController } from "../board/input";
 import { BoardRenderer } from "../board/renderer";
 import { roomImageUrl } from "../config";
+import { currentTheme, subscribeTheme } from "../theme";
 
 /**
  * Client-only Pixi host. Bakes atlases, builds the renderer + input, and wires
@@ -43,6 +44,7 @@ export function BoardCanvas({
     let renderer: BoardRenderer | null = null;
     let input: InputController | null = null;
     let unsubscribe: (() => void) | null = null;
+    let unsubscribeTheme: (() => void) | null = null;
     let atlasTextures: import("pixi.js").Texture[] = [];
     const onResize = () => renderer?.onResize();
 
@@ -65,7 +67,7 @@ export function BoardCanvas({
         app = new Application();
         await app.init({
           resizeTo: mount,
-          background: 0x0e1116,
+          background: currentTheme().board.canvas,
           antialias: true,
           resolution: window.devicePixelRatio || 1,
           autoDensity: true,
@@ -92,6 +94,10 @@ export function BoardCanvas({
         );
         input.attach();
         window.addEventListener("resize", onResize);
+        unsubscribeTheme = subscribeTheme(() => {
+          if (app) app.renderer.background.color = currentTheme().board.canvas;
+          renderer?.refreshTheme();
+        });
       } catch (e) {
         if (!disposed) setError(e instanceof Error ? e.message : "Failed to load the board.");
       }
@@ -102,6 +108,7 @@ export function BoardCanvas({
       window.removeEventListener("resize", onResize);
       input?.detach();
       unsubscribe?.();
+      unsubscribeTheme?.();
       renderer?.destroy();
       for (const t of atlasTextures) t.destroy(true);
       app?.destroy(true);

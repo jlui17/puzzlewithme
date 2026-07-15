@@ -1,17 +1,106 @@
+/*
+ * Café themes. Four palettes keyed by data-theme on <html>; :root doubles as
+ * the default (Latte) so a first paint with no attribute is already themed.
+ * Each theme's board-canvas twin lives in src/theme.ts (Pixi can't read CSS
+ * variables) — change palettes in both places.
+ *
+ * Palette approach, per theme: one warm low-saturation neutral ramp
+ * (bg → panel → elevated → border), a text ramp on the same hue, and a single
+ * muted accent. Values picked by eye against each other for a soft café feel,
+ * with text/bg pairs kept dark/light enough to stay comfortably readable.
+ *
+ * Derived tints use color-mix (Baseline 2023) so translucent surfaces track
+ * the theme instead of hard-coding rgba per theme:
+ *  --glass       55% panel: floating panels over the board — pieces underneath
+ *                stay visible (mobile can't route around the panel) while text
+ *                stays legible. Picked by eye, carried over from the old theme.
+ *  --glass-solid 92% panel: small chrome (menu bar, badge) that should read as
+ *                solid but let the board glow through faintly.
+ *  --scrim       full-screen overlay backdrops; strong enough to mute the board.
+ */
+
+:root,
+:root[data-theme="latte"] {
+  --bg: #f4ede1;
+  --bg-panel: #fdf9f1;
+  --bg-elevated: #f1e7d7;
+  --border: #e2d3bd;
+  --text: #46392e;
+  --text-dim: #8c7b69;
+  --text-faint: #b0a190;
+  --accent: #b97b52;
+  --accent-hover: #a96b44;
+  --on-accent: #fff8f0;
+  --danger: #c96f63;
+  --ok: #7ca674;
+  --warn: #d9a441;
+  --shadow: 0 10px 30px rgba(90, 70, 50, 0.14);
+}
+
+:root[data-theme="matcha"] {
+  --bg: #ecf1dd;
+  --bg-panel: #f9fbef;
+  --bg-elevated: #e7edd4;
+  --border: #d5ddbe;
+  --text: #3c4636;
+  --text-dim: #7d8a70;
+  --text-faint: #a3ae96;
+  --accent: #7d9c6a;
+  --accent-hover: #6e8c5c;
+  --on-accent: #f7faf0;
+  --danger: #c97a6d;
+  --ok: #74a069;
+  --warn: #cfa14a;
+  --shadow: 0 10px 30px rgba(70, 85, 55, 0.13);
+}
+
+:root[data-theme="taro"] {
+  --bg: #efebf5;
+  --bg-panel: #fbf9fd;
+  --bg-elevated: #eae4f2;
+  --border: #dcd2e8;
+  --text: #453e56;
+  --text-dim: #857b9b;
+  --text-faint: #aba2bd;
+  --accent: #9077bb;
+  --accent-hover: #8168ad;
+  --on-accent: #faf8fd;
+  --danger: #c9708a;
+  --ok: #7ba883;
+  --warn: #cfa14a;
+  --shadow: 0 10px 30px rgba(85, 70, 115, 0.13);
+}
+
+:root[data-theme="espresso"] {
+  --bg: #262019;
+  --bg-panel: #2f2820;
+  --bg-elevated: #3a3128;
+  --border: #4b4033;
+  --text: #efe6d9;
+  --text-dim: #b7a893;
+  --text-faint: #8b7d6a;
+  --accent: #d29a66;
+  --accent-hover: #ddab7d;
+  --on-accent: #2b2118;
+  --danger: #d9847a;
+  --ok: #94b57f;
+  --warn: #d9ae5e;
+  --shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+}
+
 :root {
-  --bg: #0e1116;
-  --bg-panel: #161b22;
-  --bg-elevated: #1c232d;
-  --border: #2a323d;
-  --text: #e6edf3;
-  --text-dim: #9aa7b4;
-  --text-faint: #6b7684;
-  --accent: #4b8bf5;
-  --accent-hover: #6ea1f8;
-  --danger: #f0616d;
-  --ok: #43c07a;
-  --radius: 10px;
-  --shadow: 0 8px 30px rgba(0, 0, 0, 0.45);
+  /* 16px reads soft without turning controls into blobs; inner elements step
+     down to --radius-sm so nesting stays visually concentric. By eye. */
+  --radius: 16px;
+  --radius-sm: 12px;
+  --glass: color-mix(in srgb, var(--bg-panel) 55%, transparent);
+  --glass-solid: color-mix(in srgb, var(--bg-panel) 92%, transparent);
+  --scrim: color-mix(in srgb, var(--text) 45%, transparent);
+}
+
+:root[data-theme="espresso"] {
+  /* Text-tinted scrim washes out on a dark theme; darken with black instead. */
+  --scrim: rgba(10, 7, 4, 0.6);
 }
 
 * {
@@ -25,7 +114,12 @@ body {
   height: 100%;
   background: var(--bg);
   color: var(--text);
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial,
+  font-family:
+    var(--font-round, ui-rounded),
+    ui-rounded,
+    "Segoe UI",
+    system-ui,
+    -apple-system,
     sans-serif;
   -webkit-font-smoothing: antialiased;
 }
@@ -60,12 +154,24 @@ a {
   justify-content: center;
   gap: 20px;
   padding: 32px;
+  /* A faint accent wash at the top so the page feels lit, not flat. 6% is the
+     most that still reads as ambience rather than a colored header. By eye. */
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--accent) 6%, var(--bg)),
+    var(--bg) 320px
+  );
 }
 
 .menu-header {
   width: 100%;
   max-width: 460px;
   text-align: left;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 10px;
 }
 
 .menu-header h1 {
@@ -78,6 +184,101 @@ a {
   margin: 0;
   color: var(--text-dim);
   font-size: 14px;
+}
+
+/* Theme dropdown (menu page header + room bottom bar) */
+
+.theme-dropdown {
+  position: relative;
+}
+
+.theme-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  /* Padding sized so the trigger clears the 40px comfortable-touch minimum. */
+  padding: 9px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg-panel);
+  color: var(--text);
+  font-size: 13px;
+  transition: border-color 0.15s ease;
+}
+
+.theme-trigger:hover,
+.theme-trigger[aria-expanded="true"] {
+  border-color: var(--accent);
+}
+
+.theme-caret {
+  color: var(--text-faint);
+  font-size: 10px;
+}
+
+.theme-menu {
+  position: absolute;
+  right: 0;
+  /* Above the room's completion overlay (z 20) and menu bar (z 25); the menu
+     opens from that bar so it must not render under it. */
+  z-index: 30;
+  min-width: 160px;
+  padding: 6px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.theme-menu--down {
+  top: calc(100% + 8px);
+}
+
+/* 640px: same phone breakpoint as .players-panel. Below it the menu-header
+   wraps and the trigger sits at the LEFT edge, so a right-aligned menu would
+   clip off-screen; align it to the trigger's left edge instead. */
+@media (max-width: 640px) {
+  .theme-menu--down {
+    left: 0;
+    right: auto;
+  }
+}
+
+.theme-menu--up {
+  bottom: calc(100% + 8px);
+}
+
+.theme-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  /* 40px: Apple/Google's documented minimum comfortable touch target. */
+  min-height: 40px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  text-align: left;
+}
+
+.theme-option:hover,
+.theme-option[aria-checked="true"] {
+  background: var(--bg-elevated);
+}
+
+.theme-option-label {
+  flex: 1;
+}
+
+.theme-option-check {
+  color: var(--accent);
+  font-weight: 700;
 }
 
 .sessions-card {
@@ -118,7 +319,7 @@ a {
   text-align: left;
   background: var(--bg-elevated);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   padding: 10px 12px;
   color: var(--text);
   transition: border-color 0.15s ease;
@@ -134,7 +335,7 @@ a {
   width: 38px;
   background: var(--bg-elevated);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   font-size: 14px;
   transition: border-color 0.15s ease;
 }
@@ -154,7 +355,7 @@ a {
   min-width: 0;
   background: var(--bg-panel);
   border: 1px solid var(--accent);
-  border-radius: 6px;
+  border-radius: 8px;
   padding: 2px 6px;
   font-size: 13px;
 }
@@ -185,6 +386,7 @@ a {
 
 .session-bar-fill {
   height: 100%;
+  border-radius: 999px;
   background: var(--accent);
 }
 
@@ -229,7 +431,7 @@ a {
   width: 100%;
   aspect-ratio: 4 / 3;
   border: 2px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   overflow: hidden;
   padding: 0;
   background: var(--bg-elevated);
@@ -297,7 +499,7 @@ a {
 }
 
 .picker-delete:hover {
-  color: #fff;
+  color: var(--on-accent);
   background: var(--danger);
   border-color: var(--danger);
 }
@@ -310,7 +512,7 @@ a {
 
 .preview {
   margin-top: 14px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   overflow: hidden;
   border: 1px solid var(--border);
 }
@@ -320,7 +522,7 @@ a {
   width: 100%;
   max-height: 220px;
   object-fit: contain;
-  background: #000;
+  background: var(--bg-elevated);
 }
 
 .slider-head {
@@ -432,7 +634,7 @@ a {
   color: var(--text-dim);
   background: var(--bg-elevated);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 8px;
   padding: 6px 8px;
 }
 
@@ -441,7 +643,7 @@ a {
   font-size: 14px;
   background: var(--bg-elevated);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 8px;
   padding: 8px 10px;
   transition: border-color 0.15s ease;
 }
@@ -454,7 +656,7 @@ a {
   flex-shrink: 0;
   background: var(--bg-elevated);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 8px;
   padding: 6px 10px;
   color: var(--text);
   font-size: 12px;
@@ -469,23 +671,26 @@ a {
   width: 100%;
   padding: 12px;
   border: none;
-  border-radius: 8px;
+  border-radius: 999px;
   background: var(--accent);
-  color: #fff;
-  font-weight: 600;
-  transition: background 0.15s ease;
+  color: var(--on-accent);
+  font-weight: 700;
+  transition:
+    background 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .create-btn:not(:disabled):hover {
   background: var(--accent-hover);
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--accent) 35%, transparent);
 }
 
 .error-banner {
   margin-top: 16px;
   padding: 10px 12px;
-  border-radius: 8px;
-  background: rgba(240, 97, 109, 0.12);
-  border: 1px solid rgba(240, 97, 109, 0.4);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--danger) 40%, transparent);
   color: var(--danger);
   font-size: 13px;
 }
@@ -556,9 +761,11 @@ a {
   font-family: ui-monospace, monospace;
   font-size: 10px;
   line-height: 1.5;
+  /* Fixed dark readout regardless of theme: it's a diagnostics surface, and a
+     constant look makes screenshots comparable across themes. */
   color: #9aa7b4;
   background: rgba(13, 17, 23, 0.75);
-  border: 1px solid var(--border);
+  border: 1px solid #2a323d;
   border-radius: 6px;
   padding: 6px 8px;
   pointer-events: none;
@@ -573,10 +780,10 @@ a {
   width: 240px;
   max-height: calc(100% - 32px);
   overflow-y: auto;
-  /* 0.55: low enough that pieces underneath stay visible through the panel
-     (mobile boards have no room to route around it), high enough that text
-     over a busy puzzle image stays legible. Picked by eye, not measured. */
-  background: rgba(22, 27, 34, 0.55);
+  /* 55% glass: low enough that pieces underneath stay visible through the
+     panel (mobile boards have no room to route around it), high enough that
+     text over a busy puzzle image stays legible. Picked by eye, not measured. */
+  background: var(--glass);
   backdrop-filter: blur(6px);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -632,7 +839,7 @@ a {
 
 .progress-bar {
   height: 6px;
-  border-radius: 3px;
+  border-radius: 999px;
   background: var(--bg-elevated);
   overflow: hidden;
   margin-bottom: 16px;
@@ -641,6 +848,7 @@ a {
 .progress-bar > span {
   display: block;
   height: 100%;
+  border-radius: 999px;
   background: var(--ok);
   transition: width 0.3s ease;
 }
@@ -677,7 +885,7 @@ a {
   width: 100%;
   background: var(--bg-elevated);
   border: 1px solid var(--accent);
-  border-radius: 6px;
+  border-radius: 8px;
   padding: 3px 6px;
   pointer-events: auto;
 }
@@ -705,7 +913,7 @@ a {
   gap: 8px;
   padding: 7px 12px;
   border-radius: 999px;
-  background: rgba(22, 27, 34, 0.92);
+  background: var(--glass-solid);
   border: 1px solid var(--border);
   font-size: 12px;
   color: var(--text-dim);
@@ -722,7 +930,7 @@ a {
 }
 .conn-dot.reconnecting,
 .conn-dot.connecting {
-  background: #e2b341;
+  background: var(--warn);
   animation: pulse 1.2s ease-in-out infinite;
 }
 .conn-dot.closed {
@@ -741,9 +949,9 @@ a {
   position: absolute;
   transform: translate(-50%, -140%);
   padding: 5px 10px;
-  border-radius: 8px;
+  border-radius: 999px;
   background: var(--danger);
-  color: #fff;
+  color: var(--on-accent);
   font-size: 12px;
   font-weight: 600;
   pointer-events: none;
@@ -778,7 +986,7 @@ a {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(6, 9, 13, 0.82);
+  background: var(--scrim);
   backdrop-filter: blur(4px);
   padding: 24px;
   z-index: 20;
@@ -803,7 +1011,7 @@ a {
   width: 30px;
   height: 30px;
   border: none;
-  border-radius: 8px;
+  border-radius: 999px;
   background: transparent;
   color: var(--text-dim);
   font-size: 22px;
@@ -827,7 +1035,7 @@ a {
 
 .completion-card .full-image {
   width: 100%;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border);
   margin-bottom: 18px;
 }
@@ -874,9 +1082,9 @@ a {
   display: inline-block;
   margin-top: 20px;
   padding: 10px 20px;
-  border-radius: 8px;
+  border-radius: 999px;
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   text-decoration: none;
   font-weight: 600;
 }
@@ -897,8 +1105,9 @@ a {
   gap: 4px;
   padding: 6px;
   border-radius: 999px;
-  background: rgba(22, 27, 34, 0.92);
+  background: var(--glass-solid);
   border: 1px solid var(--border);
+  box-shadow: var(--shadow);
 }
 
 .room-menu-btn {
@@ -939,7 +1148,8 @@ a {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(6, 9, 13, 0.88);
+  background: var(--scrim);
+  backdrop-filter: blur(4px);
   cursor: pointer;
 }
 
@@ -950,6 +1160,6 @@ a {
   max-width: 90vw;
   max-height: 85vh;
   object-fit: contain;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   box-shadow: var(--shadow);
 }

@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiBase } from "../src/config";
 import { loadOrCreateUserId } from "../src/sync";
+import { ThemeDropdown } from "../src/theme-switcher";
 
 const ACCEPTED = ["image/jpeg", "image/png", "image/webp"];
 
@@ -245,8 +246,11 @@ export default function CreatePage() {
   return (
     <main className="create-shell">
       <header className="menu-header">
-        <h1>PuzzleWithMe</h1>
-        <p className="tagline">Turn any image into a jigsaw and solve it together.</p>
+        <div>
+          <h1>PuzzleWithMe</h1>
+          <p className="tagline">Turn any image into a jigsaw and solve it together.</p>
+        </div>
+        <ThemeDropdown />
       </header>
 
       <div className="create-card">

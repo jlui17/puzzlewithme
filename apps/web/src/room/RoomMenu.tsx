@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ThemeDropdown } from "../theme-switcher";
 
 /**
  * Bottom-center menu bar for the room screen: full-image preview, players
@@ -41,6 +42,7 @@ export function RoomMenu({
             📊 Stats
           </button>
         )}
+        <ThemeDropdown direction="up" triggerClassName="room-menu-btn" />
         <a href="/" className="room-menu-btn">
           🏠 Menu
         </a>
