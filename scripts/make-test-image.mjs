@@ -3,7 +3,7 @@
 // rendered, scattered, and carry the right part of the image — a solid color
 // (what the server e2e test uses) can't show any of that.
 //
-// Usage: node scripts/make-test-image.mjs [outPath]  (default .e2e/fixture.png)
+// Usage: bun scripts/make-test-image.mjs [outPath]  (default .e2e/fixture.png)
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { mkdir } from "node:fs/promises";

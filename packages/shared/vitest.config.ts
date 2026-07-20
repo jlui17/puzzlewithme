@@ -3,7 +3,7 @@ import { defineConfig } from "vitest/config";
 // Root's vitest.config.ts defines its workspace `projects` as paths relative
 // to itself (e.g. "apps/server"); vitest resolves those relative to the
 // current working directory, not the config file's location. Running this
-// package's own `test` script (`pnpm --filter @puzzlewithme/shared test`)
+// package's own `test` script (`bun run --filter @puzzlewithme/shared test`)
 // sets cwd to this directory, so without a local config vitest picks up the
 // root one and fails resolving "apps/server" against packages/shared/apps/server.
 // A local, project-only config sidesteps that instead of touching root config.

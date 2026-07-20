@@ -90,6 +90,15 @@ Then, from your machine:
 ./deploy.sh
 ```
 
+When deploying from the VPS itself, run:
+
+```sh
+DEPLOY_MODE=local ./deploy.sh
+```
+
+Local mode syncs to `~/puzzlewithme`, using the home directory of the user
+running the deploy. Remote mode remains the default for laptop deployments.
+
 Open `https://puzzle.<your-domain>`: you should hit the Cloudflare Access
 login, and the app after the emailed code.
 

@@ -21,11 +21,11 @@ Five components (SPEC §6):
 Two processes:
 
 ```
-pnpm --filter @puzzlewithme/server dev   # :3001 — HTTP API + WebSocket
-pnpm --filter @puzzlewithme/web dev      # :3000 — Next.js UI
+bun run --filter @puzzlewithme/server dev   # :3001 — HTTP API + WebSocket
+bun run --filter @puzzlewithme/web dev      # :3000 — Next.js UI
 ```
 
-The server loads `apps/server/.env` automatically on boot (a plain `import "dotenv/config"` at the top of `main.ts`, before anything else touches `process.env`) — it's a no-op if the file doesn't exist, so this works the same whether you're running locally with a `.env` or deploying to a VPS with real env vars set another way. Both `pnpm --filter @puzzlewithme/server dev` and `pnpm --filter @puzzlewithme/server start` go through this. (Node's own `--env-file`/`--env-file-if-exists` flags were considered and rejected: the former errors when the file is missing, the latter needs Node ≥22.9, and this repo supports Node ≥20.)
+The server loads `apps/server/.env` automatically on boot (a plain `import "dotenv/config"` at the top of `main.ts`, before anything else touches `process.env`) — it's a no-op if the file doesn't exist, so this works the same whether you're running locally with a `.env` or deploying to a VPS with real env vars set another way. Both Bun commands above go through this entry point.
 
 Env vars (server):
 - `PORT` — HTTP/WS port, defaults to 3001.
@@ -42,12 +42,12 @@ The web app's Next config (`apps/web/next.config.ts`) rewrites `/api/*` to the s
 ## Testing
 
 ```
-pnpm test        # all packages
-pnpm typecheck
-pnpm build
+bun run test        # all packages
+bun run typecheck
+bun run build
 ```
 
-`pnpm test` runs everything except one integration suite gated on real infrastructure: the S3 image-store suite, skipped unless `S3_BUCKET` is set (`S3ImageStore` is unit-tested against a fake client in the default run; the gated suite just confirms the real SDK calls round-trip). The S3 suite can't clean up after itself (its IAM credentials have no delete permission), so it always overwrites one fixed object key rather than minting a new one per run.
+`bun run test` runs everything except one integration suite gated on real infrastructure: the S3 image-store suite, skipped unless `S3_BUCKET` is set (`S3ImageStore` is unit-tested against a fake client in the default run; the gated suite just confirms the real SDK calls round-trip). The S3 suite can't clean up after itself (its IAM credentials have no delete permission), so it always overwrites one fixed object key rather than minting a new one per run.
 
 **Why the server and sync logic are unit-testable at all:** puzzle geometry is a pure function of a seed (`packages/geometry`), so a test can compute the exact expected piece positions and drive a real grab/move/drop sequence without faking randomness. `apps/server/src/e2e.test.ts` uses this to boot the real HTTP+WS server in-process, create a room through the actual multipart upload endpoint, and play a real solve sequence across two WebSocket clients, asserting both converge on identical results and a late-joining third client's snapshot matches. The web client's sync layer (`apps/web/src/sync`) is DOM-free for the same reason: it takes an injected socket, so `sync-client.test.ts` and `board-store.test.ts` drive it with a fake one.
 

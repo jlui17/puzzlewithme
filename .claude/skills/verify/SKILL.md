@@ -26,7 +26,7 @@ State is throwaway by design (`SQLITE_PATH=:memory:`, uploads under gitignored `
 ## Fixture image
 
 ```bash
-node scripts/make-test-image.mjs        # writes .e2e/fixture.png
+bun scripts/make-test-image.mjs         # writes .e2e/fixture.png
 ```
 
 800×600, 8×6 labeled color cells: adjacent pieces almost always differ in color and each carries its `row,col` label, so a screenshot shows at a glance whether pieces rendered and carry the right image region.

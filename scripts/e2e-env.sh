@@ -28,7 +28,7 @@ start() {
   mkdir -p "$STATE_DIR"
 
   # Job control gives each background pipeline its own process group, so
-  # stop() can kill the whole pnpm -> tsx/next tree with one kill -- -pgid.
+  # stop() can kill the whole Bun -> tsx/next tree with one kill -- -pgid.
   set -m
 
   # :memory: SQLite + throwaway uploads dir: every start is a clean slate, so
@@ -36,18 +36,18 @@ start() {
   # S3_BUCKET="" beats apps/server/.env pointing at real S3: dotenv never
   # overrides an existing env var, and main.ts treats empty as unset.
   PORT=$SERVER_PORT SQLITE_PATH=":memory:" S3_BUCKET="" IMAGE_UPLOADS_DIR="$STATE_DIR/uploads" \
-    pnpm --filter @puzzlewithme/server dev >"$STATE_DIR/server.log" 2>&1 &
+    bun run --filter @puzzlewithme/server dev >"$STATE_DIR/server.log" 2>&1 &
   echo $! > "$STATE_DIR/server.pid"
 
-  # PORT env instead of `-- -p`: pnpm forwards the literal `--` to next dev,
+  # PORT env instead of `-- -p`: the runner forwards the literal `--` to next dev,
   # which reads it as a project directory and dies.
   PORT=$WEB_PORT NEXT_PUBLIC_SERVER_URL="http://localhost:$SERVER_PORT" \
-    pnpm --filter @puzzlewithme/web dev >"$STATE_DIR/web.log" 2>&1 &
+    bun run --filter @puzzlewithme/web dev >"$STATE_DIR/web.log" 2>&1 &
   echo $! > "$STATE_DIR/web.pid"
 
   # Server boot is tsx + sqlite (fast); Next dev compiles on demand, so its
   # readiness here only means the port is accepting — the first page load
-  # still pays the compile. 60 tries × 0.5s covers a cold pnpm/tsx start.
+  # still pays the compile. 60 tries × 0.5s covers a cold Bun/tsx start.
   for _ in $(seq 1 60); do
     server_up=$(responds "http://localhost:$SERVER_PORT/api/rooms" && echo 1 || echo "")
     web_up=$(responds "http://localhost:$WEB_PORT" && echo 1 || echo "")
@@ -74,7 +74,7 @@ stop() {
     pidfile="$STATE_DIR/$name.pid"
     if [ -f "$pidfile" ]; then
       pid=$(cat "$pidfile")
-      # pnpm wraps the real process; kill the whole process group it leads.
+      # Bun wraps the real process; kill the whole process group it leads.
       kill -- -"$pid" 2>/dev/null || kill "$pid" 2>/dev/null || true
       rm -f "$pidfile"
       echo "stopped $name ($pid)"

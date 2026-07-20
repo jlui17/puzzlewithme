@@ -8,16 +8,30 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-# SSH destination for the VPS. An ssh-config alias by default so the public
-# repo carries no hostname/IP/user; point DEPLOY_HOST elsewhere to deploy to
-# a different box.
+# Set DEPLOY_MODE=local when running this script on the VPS itself. Local
+# deploys target the current user's home directory, so no VPS username or
+# absolute path is baked into the public repo.
+MODE="${DEPLOY_MODE:-remote}"
 HOST="${DEPLOY_HOST:-oc}"
 DIR="puzzlewithme"
 
-echo "==> typecheck"
-pnpm typecheck
+case "$MODE" in
+  local)
+    TARGET="$HOME/$DIR"
+    ;;
+  remote)
+    TARGET="$HOST:~/$DIR"
+    ;;
+  *)
+    echo "DEPLOY_MODE must be 'local' or 'remote'" >&2
+    exit 2
+    ;;
+esac
 
-echo "==> sync to $HOST:~/$DIR"
+echo "==> typecheck"
+bun run typecheck
+
+echo "==> sync to $TARGET"
 # --delete keeps the remote tree an exact mirror so removed files don't
 # linger. Excluded paths are both not-shipped and protected from that
 # deletion; .env matters most (the VPS's tunnel token lives there and must
@@ -31,12 +45,20 @@ rsync -az --delete \
   --exclude data \
   --exclude uploaded-images \
   --exclude coverage \
-  ./ "$HOST:~/$DIR/"
+  --exclude .e2e \
+  --exclude .claude/worktrees \
+  --exclude '*.tsbuildinfo' \
+  --exclude next-env.d.ts \
+  ./ "$TARGET/"
 
 echo "==> build + restart"
 # compose only rebuilds layers whose inputs changed, so an unchanged app is a
 # no-op and the server flushes rooms on SIGTERM before restarting.
-ssh "$HOST" "cd ~/$DIR && sudo docker compose up -d --build" | tail -5
+if [[ "$MODE" == local ]]; then
+  (cd "$TARGET" && sudo docker compose up -d --build) | tail -5
+else
+  ssh "$HOST" "cd ~/$DIR && sudo docker compose up -d --build" | tail -5
+fi
 
 echo "==> health check"
 # From inside the compose network: homepage via web, and an API route that
@@ -45,7 +67,7 @@ echo "==> health check"
 # Retries because compose returns before the recreated containers finish
 # booting; 15x2s comfortably covers the observed ~seconds startup while
 # still failing fast on a genuinely broken deploy.
-ssh "$HOST" "cd ~/$DIR && sudo docker compose exec -T web node -e \"
+HEALTH_CHECK="
 const check = () => Promise.all([
   fetch('http://localhost:3000/').then(r => { if (r.status !== 200) throw new Error('homepage ' + r.status); }),
   fetch('http://localhost:3000/api/rooms/deploy-check').then(r => { if (r.status !== 404) throw new Error('api ' + r.status); }),
@@ -54,6 +76,12 @@ const retry = (n) => check().then(() => console.log('healthy')).catch(e => {
   if (n <= 0) { console.error(e.message); process.exit(1); }
   setTimeout(() => retry(n - 1), 2000);
 });
-retry(15);\""
+retry(15);"
+
+if [[ "$MODE" == local ]]; then
+  (cd "$TARGET" && sudo docker compose exec -T web node -e "$HEALTH_CHECK")
+else
+  ssh "$HOST" "cd ~/$DIR && sudo docker compose exec -T web node -e \"$HEALTH_CHECK\""
+fi
 
 echo "==> deployed"
