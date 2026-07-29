@@ -16,12 +16,14 @@ Drives the real app (Next.js web + game server + WebSocket sync + PixiJS board) 
 ## Stack lifecycle
 
 ```bash
-scripts/e2e-env.sh start    # web :3100, server :3101 — isolated from dev's 3000/3001
+scripts/e2e-env.sh start            # web :3100, server :3101 — isolated from dev's 3000/3001
+scripts/e2e-env.sh start --fresh    # same, after wiping rooms and uploads
 scripts/e2e-env.sh stop
 scripts/e2e-env.sh status
+scripts/e2e-env.sh reset            # stop, then wipe
 ```
 
-State is throwaway by design (`SQLITE_PATH=:memory:`, uploads under gitignored `.e2e/`), so every start is a clean slate and nothing touches the real dev DB or S3. Logs: `.e2e/server.log`, `.e2e/web.log`. `start` warms the `/` and `/room/[id]` dev compiles so the browser never waits on them.
+State lives in gitignored `.e2e/data` (SQLite db + uploads) and survives a stop/start, so rooms and gallery images from an earlier run are still there when you come back. Nothing touches the real dev DB or S3 either way. Use `--fresh` when leftovers would confuse the check — anything reading the home gallery or a room list — or when you want to prove first-run behavior. Logs: `.e2e/server.log`, `.e2e/web.log`. `start` warms the `/` and `/room/[id]` dev compiles so the browser never waits on them.
 
 ## Fixture image
 

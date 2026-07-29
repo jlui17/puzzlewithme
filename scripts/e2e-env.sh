@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Isolated browser-validation stack: web + server on their own ports with
-# throwaway state, so it can run alongside (or instead of) the normal dev
+# their own state, so it can run alongside (or instead of) the normal dev
 # servers without touching their DB or uploads.
 #
-# Usage: scripts/e2e-env.sh start|stop|status
+# Usage: scripts/e2e-env.sh start [--fresh]|stop|status|reset
 #
 # Ports 3100/3101 mirror the dev pair 3000/3001 (+100) so the mapping is easy
 # to remember while never colliding with a dev stack someone left running.
@@ -11,9 +11,13 @@ WEB_PORT=3100
 SERVER_PORT=3101
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-# Runtime state (pids, logs, uploads, fixture) lives in a gitignored dir so a
-# crashed run leaves nothing for git to pick up.
+# Runtime state (pids, logs, fixture, game state) lives in a gitignored dir so
+# a crashed run leaves nothing for git to pick up.
 STATE_DIR="$ROOT/.e2e"
+# Durable game state, both halves under one dir: the DB rows and the image
+# bytes they point at have to be wiped as a unit, or a reset leaves rooms
+# referencing images the gallery no longer lists.
+DATA_DIR="$STATE_DIR/data"
 
 # The server has no health route; any HTTP status (even 404) proves the
 # process is up, while curl reports 000 when nothing is listening.
@@ -25,17 +29,23 @@ start() {
   if [ -f "$STATE_DIR/server.pid" ] && kill -0 "$(cat "$STATE_DIR/server.pid")" 2>/dev/null; then
     echo "already running (use 'stop' first)"; status; return 0
   fi
-  mkdir -p "$STATE_DIR"
+  # After the running check, so --fresh can never delete the DB out from under
+  # a live server.
+  if [ "$1" = "--fresh" ]; then
+    rm -rf "$DATA_DIR"
+    echo "wiped state ($DATA_DIR)"
+  fi
+  mkdir -p "$DATA_DIR"
 
   # Job control gives each background pipeline its own process group, so
   # stop() can kill the whole Bun -> tsx/next tree with one kill -- -pgid.
   set -m
 
-  # :memory: SQLite + throwaway uploads dir: every start is a clean slate, so
-  # validation steps never depend on leftovers from a previous run.
+  # File-backed SQLite + uploads dir under DATA_DIR, so a restart keeps the
+  # rooms and images an earlier run set up; `start --fresh` is the clean slate.
   # S3_BUCKET="" beats apps/server/.env pointing at real S3: dotenv never
   # overrides an existing env var, and main.ts treats empty as unset.
-  PORT=$SERVER_PORT SQLITE_PATH=":memory:" S3_BUCKET="" IMAGE_UPLOADS_DIR="$STATE_DIR/uploads" \
+  PORT=$SERVER_PORT SQLITE_PATH="$DATA_DIR/puzzlewithme.db" S3_BUCKET="" IMAGE_UPLOADS_DIR="$DATA_DIR/uploads" \
     bun run --filter @puzzlewithme/server dev >"$STATE_DIR/server.log" 2>&1 &
   echo $! > "$STATE_DIR/server.pid"
 
@@ -66,7 +76,7 @@ start() {
   # stares at a Next dev-compile spinner.
   curl -sf -o /dev/null "http://localhost:$WEB_PORT" || true
   curl -sf -o /dev/null "http://localhost:$WEB_PORT/room/warmup" || true
-  echo "ready: web http://localhost:$WEB_PORT  server http://localhost:$SERVER_PORT  logs $STATE_DIR/*.log"
+  echo "ready: web http://localhost:$WEB_PORT  server http://localhost:$SERVER_PORT  logs $STATE_DIR/*.log  state $DATA_DIR"
 }
 
 stop() {
@@ -87,6 +97,14 @@ stop() {
   done
 }
 
+reset() {
+  # Stop first: better-sqlite3 holds the db file open, so wiping under a live
+  # server would leave it writing to unlinked inodes.
+  stop
+  rm -rf "$DATA_DIR"
+  echo "wiped state ($DATA_DIR)"
+}
+
 status() {
   for entry in "web:$WEB_PORT" "server:$SERVER_PORT"; do
     name=${entry%%:*}; port=${entry##*:}
@@ -99,8 +117,14 @@ status() {
 }
 
 case "${1:-}" in
-  start) start ;;
+  start)
+    case "${2:-}" in
+      "" | --fresh) start "${2:-}" ;;
+      *) echo "usage: $0 start [--fresh]" >&2; exit 2 ;;
+    esac
+    ;;
   stop) stop ;;
   status) status ;;
-  *) echo "usage: $0 start|stop|status" >&2; exit 2 ;;
+  reset) reset ;;
+  *) echo "usage: $0 start [--fresh]|stop|status|reset" >&2; exit 2 ;;
 esac
