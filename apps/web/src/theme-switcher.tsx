@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { applyTheme, currentTheme, subscribeTheme, THEMES } from "./theme";
 
 /**
@@ -18,80 +18,24 @@ function useThemeId(): string {
 }
 
 /**
- * Theme dropdown, shared by the menu page (opens down) and the room's bottom
- * bar (opens up, so the list isn't clipped by the viewport edge). Custom
- * popover rather than a native <select> so the options can show emoji + active
- * check and match the themed chrome on both platforms.
+ * One button that steps to the next light. It shows where it will take you
+ * rather than where you are, so the glyph and the label say the same thing —
+ * which matters in the phone tray, where the label is dropped. Cycles rather
+ * than flips, so a third light would need no change here.
  */
-export function ThemeDropdown({
-  direction = "down",
-  /** Extra class for the trigger, e.g. "room-menu-btn" to blend into the bar. */
-  triggerClassName,
-}: {
-  direction?: "down" | "up";
-  triggerClassName?: string;
-}) {
+export function ThemeSwitch({ className }: { className?: string }) {
   const active = useThemeId();
-  const theme = THEMES.find((t) => t.id === active) ?? THEMES[0]!;
-  const [open, setOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    function onPointerDown(e: PointerEvent): void {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
-    }
-    function onKey(e: KeyboardEvent): void {
-      if (e.key === "Escape") setOpen(false);
-    }
-    document.addEventListener("pointerdown", onPointerDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("pointerdown", onPointerDown);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
-
+  const next = THEMES[(THEMES.findIndex((t) => t.id === active) + 1) % THEMES.length]!;
+  const label = `Switch to ${next.label.toLowerCase()}`;
   return (
-    <div className="theme-dropdown" ref={rootRef}>
-      <button
-        type="button"
-        className={triggerClassName ?? "theme-trigger"}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        aria-label={`Theme: ${theme.label}`}
-        onClick={() => setOpen((v) => !v)}
-      >
-        <span aria-hidden="true">{theme.emoji}</span> {theme.label}{" "}
-        <span className="theme-caret" aria-hidden="true">
-          {direction === "up" ? "▴" : "▾"}
-        </span>
-      </button>
-      {open && (
-        <div className={`theme-menu theme-menu--${direction}`} role="menu" aria-label="Color theme">
-          {THEMES.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              className="theme-option"
-              role="menuitemradio"
-              aria-checked={t.id === active}
-              onClick={() => {
-                applyTheme(t.id);
-                setOpen(false);
-              }}
-            >
-              <span aria-hidden="true">{t.emoji}</span>
-              <span className="theme-option-label">{t.label}</span>
-              {t.id === active && (
-                <span className="theme-option-check" aria-hidden="true">
-                  ✓
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
+    <button
+      type="button"
+      className={className ?? "theme-switch"}
+      aria-label={label}
+      onClick={() => applyTheme(next.id)}
+    >
+      <span aria-hidden="true">{next.emoji}</span>{" "}
+      <span className="theme-switch-label">{label}</span>
+    </button>
   );
 }

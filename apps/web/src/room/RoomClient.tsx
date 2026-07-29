@@ -2,7 +2,7 @@
 
 import type { RoomSettings } from "@puzzlewithme/shared";
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   browserClock,
   browserScheduler,
@@ -14,8 +14,9 @@ import {
   type ConnectionStatus,
 } from "../sync";
 import { roomImageUrl, wsUrl } from "../config";
+import { Cup, TableProps, TableSurface } from "../table";
 import { CompletionOverlay, type Contribution } from "./CompletionOverlay";
-import { PlayersPanel, type PlayerView } from "./PlayersPanel";
+import { BrewSlip, PlayersPanel, type PlayerView } from "./PlayersPanel";
 import { RoomMenu } from "./RoomMenu";
 
 const PANEL_COLLAPSED_KEY = "pwm:panelCollapsed";
@@ -114,31 +115,46 @@ export function RoomClient({ roomId }: { roomId: string }) {
 
   if (load.phase === "loading") {
     return (
-      <div className="center-msg">
-        <div className="spinner" />
-        <p>Loading room…</p>
-      </div>
+      <StateCard>
+        <Cup className="state-cup" />
+        <h2>Brewing your puzzle…</h2>
+        <p>Laying out the pieces and pulling up chairs.</p>
+      </StateCard>
     );
   }
   if (load.phase === "not_found") {
     return (
-      <div className="center-msg">
-        <h2>Room not found</h2>
-        <p>This puzzle link is invalid or the room no longer exists.</p>
-        <a href="/">Create a new puzzle</a>
-      </div>
+      <StateCard>
+        <div className="script">sorry —</div>
+        <h2>no such table</h2>
+        <p>That link&apos;s gone cold. The room isn&apos;t here any more.</p>
+        <a href="/" className="state-btn">
+          Start a fresh one
+        </a>
+      </StateCard>
     );
   }
   if (load.phase === "error") {
     return (
-      <div className="center-msg">
-        <h2>Something went wrong</h2>
+      <StateCard>
+        <div className="script">hm —</div>
+        <h2>the kitchen&apos;s quiet</h2>
         <p>{load.message}</p>
-      </div>
+      </StateCard>
     );
   }
 
   return <RoomLive settings={load.settings} />;
+}
+
+/** A slip left on an empty table: every non-playable room state renders here. */
+function StateCard({ children }: { children: ReactNode }) {
+  return (
+    <div className="state-shell">
+      <TableSurface />
+      <div className="state-card">{children}</div>
+    </div>
+  );
 }
 
 function RoomLive({ settings }: { settings: RoomSettings }) {
@@ -244,28 +260,35 @@ function RoomLive({ settings }: { settings: RoomSettings }) {
 
   if (roomFull) {
     return (
-      <div className="center-msg">
-        <h2>Room full</h2>
-        <p>This room is at capacity. Try again later, or create your own puzzle.</p>
-        <a href="/">Create a new puzzle</a>
-      </div>
+      <StateCard>
+        <div className="script">oof —</div>
+        <h2>full house</h2>
+        <p>Every seat at this table is taken. Try again in a bit, or put your own puzzle on.</p>
+        <a href="/" className="state-btn">
+          Start a fresh one
+        </a>
+      </StateCard>
     );
   }
 
   return (
     <div className="room-shell">
+      <TableSurface />
+      <TableProps />
       <BoardCanvas sync={sync} settings={settings} interactive={!completed} pointerRef={pointerRef} />
 
       <ConnectionBadge status={panel.connection} />
 
-      <PlayersPanel
-        players={panel.players}
-        localGuestId={panel.localGuestId}
-        placed={panel.placed}
-        total={panel.total}
-        onRename={onRename}
-        collapsed={playersCollapsed}
-      />
+      <BrewSlip placed={panel.placed} total={panel.total} />
+
+      {!playersCollapsed && (
+        <PlayersPanel
+          players={panel.players}
+          localGuestId={panel.localGuestId}
+          placed={panel.placed}
+          onRename={onRename}
+        />
+      )}
 
       <RoomMenu
         imageUrl={roomImageUrl(settings.roomId)}
@@ -277,7 +300,7 @@ function RoomLive({ settings }: { settings: RoomSettings }) {
 
       {toast && (
         <div className="held-toast" key={toast.key} style={{ left: toast.x, top: toast.y }}>
-          Held by {toast.name}
+          {toast.name}&apos;s got that one
         </div>
       )}
 
@@ -360,12 +383,12 @@ function DebugOverlay({ sync }: { sync: SyncClient }) {
 
 function ConnectionBadge({ status }: { status: ConnectionStatus }) {
   const label: Record<ConnectionStatus, string> = {
-    idle: "Connecting…",
-    connecting: "Connecting…",
-    connected: "Connected",
-    reconnecting: "Reconnecting…",
-    closed: "Disconnected",
-    room_full: "Room full",
+    idle: "pulling up a chair…",
+    connecting: "pulling up a chair…",
+    connected: "at the table",
+    reconnecting: "finding the table again…",
+    closed: "you slipped offline",
+    room_full: "full house",
   };
   const dot =
     status === "connected"

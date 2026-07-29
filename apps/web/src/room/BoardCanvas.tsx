@@ -10,7 +10,7 @@ import { buildPiecePolygons } from "../board/hit-test";
 import { InputController } from "../board/input";
 import { BoardRenderer } from "../board/renderer";
 import { roomImageUrl } from "../config";
-import { currentTheme, subscribeTheme } from "../theme";
+import { subscribeTheme } from "../theme";
 
 /**
  * Client-only Pixi host. Bakes atlases, builds the renderer + input, and wires
@@ -67,7 +67,10 @@ export function BoardCanvas({
         app = new Application();
         await app.init({
           resizeTo: mount,
-          background: currentTheme().board.canvas,
+          // Transparent: the walnut table is the CSS .table layer behind the
+          // canvas, so the board screen shares the surface with every other
+          // screen instead of painting its own flat backdrop.
+          backgroundAlpha: 0,
           antialias: true,
           resolution: window.devicePixelRatio || 1,
           autoDensity: true,
@@ -94,10 +97,7 @@ export function BoardCanvas({
         );
         input.attach();
         window.addEventListener("resize", onResize);
-        unsubscribeTheme = subscribeTheme(() => {
-          if (app) app.renderer.background.color = currentTheme().board.canvas;
-          renderer?.refreshTheme();
-        });
+        unsubscribeTheme = subscribeTheme(() => renderer?.refreshTheme());
       } catch (e) {
         if (!disposed) setError(e instanceof Error ? e.message : "Failed to load the board.");
       }
@@ -117,9 +117,12 @@ export function BoardCanvas({
 
   if (error) {
     return (
-      <div className="center-msg">
-        <h2>Couldn&apos;t load the puzzle</h2>
-        <p>{error}</p>
+      <div className="state-shell">
+        <div className="state-card">
+          <div className="script">sorry —</div>
+          <h2>the picture didn&apos;t arrive</h2>
+          <p>{error}</p>
+        </div>
       </div>
     );
   }

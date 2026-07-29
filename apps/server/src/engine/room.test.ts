@@ -1,4 +1,4 @@
-import { boardBounds, clampGroupToBoard, initialScatter } from "@puzzlewithme/geometry";
+import { clampGroupToBoard, initialScatter, playArea } from "@puzzlewithme/geometry";
 import type { RoomSettings } from "@puzzlewithme/shared";
 import { describe, expect, it } from "vitest";
 import { HOLD_TIMEOUT_MS, ROOM_CAP } from "./constants.js";
@@ -12,10 +12,11 @@ class FakeClock {
   }
 }
 
-// 2x2 @ "test-seed" scatter (deterministic): piece 0 (-173.8,-154.9),
-// 1 (-10.9,-152.5), 2 (-175.0,166.9), 3 (147.0,-178.8); board -200..400.
-// Test drop coordinates below were chosen against these so unintended snaps
-// can't occur (nearest wrong-fit distance is ~90 units, tolerance is 15).
+// 2x2 @ "test-seed" scatter (deterministic): piece 0 (-94.7,264.1),
+// 1 (67.7,260.0), 2 (227.1,262.0), 3 (-118.6,-223.1); play area x -473..673,
+// y -258..458 (what drops clamp to). Test drop coordinates below were chosen
+// against these so unintended snaps can't occur: no adjacent pair sits closer
+// than 62 units to its snap offset, and the tolerance is 15.
 function makeSettings(overrides: Partial<RoomSettings> = {}): RoomSettings {
   return {
     roomId: "room-1",
@@ -397,13 +398,17 @@ describe("drop: merge and scoring (FR-11, FR-21)", () => {
     });
   });
 
-  it("clamps an out-of-bounds drop to the board edge (FR-15)", () => {
+  it("clamps an out-of-bounds drop to the mat's hem (FR-15)", () => {
     const { engine } = makeEngine();
     const p1 = joinOk(engine);
     const out = dropOk(engine, p1.identity.id, "1-1", 99_999, 99_999);
     const expected = clampGroupToBoard({ x: 99_999, y: 99_999 }, [3], 2, 2);
-    expect(out.result.group.position).toEqual(expected);
-    const bounds = boardBounds(2, 2);
+    // Compared to a tolerance, not exactly: the play area's extent is solved
+    // with a square root, so the engine's clamp and this recomputation agree to
+    // well past visual precision but not always in the last bit.
+    expect(out.result.group.position.x).toBeCloseTo(expected.x, 6);
+    expect(out.result.group.position.y).toBeCloseTo(expected.y, 6);
+    const bounds = playArea(2, 2);
     expect(expected.x).toBeLessThan(bounds.maxX);
     expect(out.result.mergedGroupIds).toEqual([]);
   });
@@ -419,9 +424,9 @@ describe("drop: cascade merge", () => {
       now: clock.now,
     });
     const p1 = joinOk(engine);
-    dropOk(engine, p1.identity.id, "0-0", -250, 450);
-    dropOk(engine, p1.identity.id, "0-2", -50, 450); // 0 and 2 aren't adjacent: no snap
-    const cascade = dropOk(engine, p1.identity.id, "0-1", -147, 452);
+    dropOk(engine, p1.identity.id, "0-0", -250, 400);
+    dropOk(engine, p1.identity.id, "0-2", -50, 400); // 0 and 2 aren't adjacent: no snap
+    const cascade = dropOk(engine, p1.identity.id, "0-1", -147, 402);
     expect(cascade.result.mergedGroupIds).toEqual(["0-0", "0-2"]);
     expect(cascade.result.group).toEqual({
       id: "0-1",
@@ -430,7 +435,7 @@ describe("drop: cascade merge", () => {
         { row: 0, col: 1 },
         { row: 0, col: 2 },
       ],
-      position: { x: -250, y: 450 },
+      position: { x: -250, y: 400 },
       lockedToFrame: false,
     });
     expect(cascade.result.scoreCredits).toEqual([{ guestId: p1.identity.id, piecesCredited: 3 }]);

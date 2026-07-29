@@ -9,11 +9,12 @@ export interface Contribution {
 }
 
 /**
- * Completion moment (§3.4, FR-25). Driven by room status === "completed" so it
- * covers both the live finish and loading an already-done room read-only. Elapsed
- * time is shown only when present: a fresh read-only load has no completion event
- * and the GET carries no solving time (advisor note), so we omit it rather than
- * render a bogus 0:00.
+ * The finish (§3.4, FR-25): a print of what you made, and a receipt for who
+ * did what. Driven by room status === "completed" so it covers both the live
+ * finish and loading an already-done room read-only. Elapsed time is shown
+ * only when present: a fresh read-only load has no completion event and the
+ * GET carries no solving time (advisor note), so we omit it rather than render
+ * a bogus 0:00.
  */
 export function CompletionOverlay({
   imageUrl,
@@ -30,30 +31,39 @@ export function CompletionOverlay({
   onClose: () => void;
 }) {
   const shareBase = contributions.reduce((s, c) => s + c.placedCount, 0);
+  const hands = contributions.length;
   return (
     <div className="completion-overlay">
-      <div className="completion-card">
+      <div className="print">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={imageUrl} alt="The completed puzzle" />
+        <div className="print-caption">
+          {total} pieces, {hands === 1 ? "on your own" : `${hands} of us`}
+        </div>
+      </div>
+
+      <div className="receipt">
         <button className="overlay-close" onClick={onClose} aria-label="View the board">
           ×
         </button>
-        <h2>Puzzle complete</h2>
-        <p className="sub">Every piece is placed.</p>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img className="full-image" src={imageUrl} alt="The completed puzzle" />
+        <div className="receipt-head">
+          <h2>Solved.</h2>
+          <div className="script">that&apos;s the whole picture</div>
+        </div>
         <div className="stat-row">
           <div className="stat">
             <div className="value">{total}</div>
-            <div className="key">Pieces</div>
+            <div className="key">PIECES</div>
           </div>
           {elapsedMs !== null && (
             <div className="stat">
               <div className="value">{formatElapsed(elapsedMs)}</div>
-              <div className="key">Active time</div>
+              <div className="key">AT THE TABLE</div>
             </div>
           )}
           <div className="stat">
-            <div className="value">{contributions.length}</div>
-            <div className="key">Players</div>
+            <div className="value">{hands}</div>
+            <div className="key">HANDS</div>
           </div>
         </div>
         {contributions.length > 0 && (
@@ -70,9 +80,10 @@ export function CompletionOverlay({
             ))}
           </div>
         )}
-        <Link className="new-room" href="/">
-          Create a new puzzle
+        <Link className="receipt-btn" href="/">
+          Put another one on the table
         </Link>
+        <div className="receipt-foot">or close this to look at the finished board</div>
       </div>
     </div>
   );

@@ -51,7 +51,10 @@ start() {
 
   # PORT env instead of `-- -p`: the runner forwards the literal `--` to next dev,
   # which reads it as a project directory and dies.
-  PORT=$WEB_PORT NEXT_PUBLIC_SERVER_URL="http://localhost:$SERVER_PORT" \
+  # NEXT_DIST_DIR keeps this compile out of the dev server's .next (see
+  # apps/web/next.config.ts): sharing it hands dev's browsers a bundle wired to
+  # this stack's server, where none of dev's rooms exist.
+  PORT=$WEB_PORT NEXT_PUBLIC_SERVER_URL="http://localhost:$SERVER_PORT" NEXT_DIST_DIR=".next-e2e" \
     bun run --filter @puzzlewithme/web dev >"$STATE_DIR/web.log" 2>&1 &
   echo $! > "$STATE_DIR/web.pid"
 

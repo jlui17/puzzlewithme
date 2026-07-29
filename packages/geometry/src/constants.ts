@@ -6,9 +6,11 @@
  *   (0, 0). Piece (row, col)'s correct cell origin (its top-left corner when
  *   assembled) is (col * CELL_SIZE, row * CELL_SIZE). The frame spans
  *   (0, 0) .. (cols * CELL_SIZE, rows * CELL_SIZE).
- * - The board (table) is BOARD_SIZE_MULTIPLIER times the frame in each
- *   dimension, centered on the frame, so board coordinates extend negative on
- *   the top/left of the frame (see boardBounds in snap.ts).
+ * - The mat (the cloth the puzzle is worked on) is centered on the frame and
+ *   sized to hold the pieces with room to sort, so its coordinates extend
+ *   negative on the top/left of the frame (see playArea/matBounds in
+ *   scatter.js). How far it reaches follows the piece count, not a fixed
+ *   multiple of the frame.
  * - A group's position is the world coordinate of its anchor piece's cell
  *   origin. The anchor is the group's lowest piece id (row-major); every other
  *   piece's world origin is derived from the frame offset to the anchor.
@@ -24,14 +26,27 @@
 export const CELL_SIZE = 100;
 
 /**
- * The board is this many times the frame's size in each dimension (FR-8:
- * "the board is several times larger than the frame in each dimension, giving
- * room to sort"). 3x gives a margin one full frame wide on every side, which
- * comfortably holds the scattered pieces in a ring around the frame (see
- * initialScatter) without pushing them so far that panning to sort becomes
- * tedious. Guessed from the tanggle.io look, not measured; tunable.
+ * Centre-to-centre spacing of scattered pieces, in cells. Above 1 so a cell's
+ * footprint plus its jitter can't overlap its neighbour's — that separation is
+ * what keeps every piece individually pickable (FR-7). 1.6 leaves a visible
+ * gap of cloth between pieces rather than a tiled mosaic.
  */
-export const BOARD_SIZE_MULTIPLIER = 3;
+export const SCATTER_PITCH_CELLS = 1.6;
+
+/**
+ * How much more room the play surface holds than the pieces strictly need, as a
+ * multiple of the piece count. The surplus does two jobs: initialScatter picks
+ * its cells from a pool this much larger than the piece count, so the ring's
+ * outer edge is ragged instead of a perfectly packed lattice; and what's left
+ * over is where players sort pieces outward as they work.
+ *
+ * This is what makes the surface grow with the puzzle (FR-8's "room to sort"):
+ * a 20-piece board gets a band about two cells deep around the frame, a
+ * 1000-piece board a much wider one, instead of every puzzle getting the same
+ * fixed multiple of its frame and small ones feeling scattered to the winds.
+ * Picked by eye from how ragged the outer edge looks; tunable.
+ */
+export const SCATTER_ROOM_FACTOR = 1.45;
 
 /**
  * Snap tolerance in puzzle-space units (FR-13). A drop counts as a snap when a
@@ -113,3 +128,19 @@ export const TAB_MAX_HEIGHT_RATIO = TAB_HEIGHT_RATIO + TAB_SIZE_JITTER;
  */
 export const PUZZLE_SALT = 0x9e3779b9;
 export const SCATTER_SALT = 0x85ebca6b;
+
+/**
+ * The mat's width-to-height ratio, held constant whatever the picture's shape
+ * is: the cloth is a piece of furniture, so it shouldn't turn portrait because
+ * someone uploaded a portrait photo. 1.6 (16:10) is landscape enough to suit a
+ * wide window. Widening only ever adds cloth beyond the sorting band, never
+ * takes any away.
+ */
+export const MAT_ASPECT = 1.6;
+
+/**
+ * The stitched hem's inset from the mat's edge, as a fraction of the mat's
+ * shorter side. Pieces scatter and clamp inside the hem (playArea), so the
+ * dashed line a player sees is exactly the edge of where pieces can go.
+ */
+export const MAT_HEM_INSET_RATIO = 0.02;

@@ -4,9 +4,10 @@ import { deriveGrid, MAX_PIECE_COUNT, MIN_PIECE_COUNT } from "@puzzlewithme/geom
 import { MAX_NAME_LENGTH } from "@puzzlewithme/shared";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { apiBase } from "../src/config";
+import { apiBase, roomImageUrl } from "../src/config";
 import { loadOrCreateUserId } from "../src/sync";
-import { ThemeDropdown } from "../src/theme-switcher";
+import { Cup, TableSurface } from "../src/table";
+import { ThemeSwitch } from "../src/theme-switcher";
 
 const ACCEPTED = ["image/jpeg", "image/png", "image/webp"];
 
@@ -243,146 +244,181 @@ export default function CreatePage() {
     }
   }
 
+  const pieces = grid === null ? target : grid.rows * grid.cols;
+
   return (
-    <main className="create-shell">
-      <header className="menu-header">
-        <div>
-          <h1>PuzzleWithMe</h1>
-          <p className="tagline">Turn any image into a jigsaw and solve it together.</p>
-        </div>
-        <ThemeDropdown />
-      </header>
+    <main className="table-page">
+      <TableSurface />
 
-      <div className="create-card">
-        <div className="field">
-          <span className="field-label" id="image-picker-label">
-            Image
-          </span>
-          {/* The real input stays hidden; the upload tile below triggers it so
-              new-upload and reuse-from-gallery are peers in one picker. */}
-          <input
-            type="file"
-            ref={fileInputRef}
-            accept={ACCEPTED.join(",")}
-            style={{ display: "none" }}
-            onChange={(e) => onPick(e.target.files?.[0] ?? null)}
-          />
-          <div className="picker-grid" role="group" aria-labelledby="image-picker-label">
-            <button
-              type="button"
-              className={file !== null ? "picker-tile picker-upload picker-tile--selected" : "picker-tile picker-upload"}
-              onClick={() => fileInputRef.current?.click()}
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={(e) => {
-                e.preventDefault();
-                onPick(e.dataTransfer.files?.[0] ?? null);
-              }}
-            >
-              <span className="picker-upload-plus" aria-hidden="true">
-                +
-              </span>
-              <span className="picker-upload-text">{file !== null ? file.name : "Upload"}</span>
-            </button>
-            {gallery.map((img) => {
-              const selected = galleryPick?.imageId === img.imageId;
-              return (
-                <div key={img.imageId} className={selected ? "picker-item picker-item--selected" : "picker-item"}>
-                  <button
-                    type="button"
-                    className="picker-tile picker-photo"
-                    aria-pressed={selected}
-                    aria-label="Use this image for a new puzzle"
-                    onClick={() => onPickFromGallery(img)}
-                  >
-                    {/* Same-origin API thumbnail; next/image adds no value here. */}
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={`${apiBase}/api/images/${encodeURIComponent(img.imageId)}`} alt="" loading="lazy" />
-                  </button>
-                  <button
-                    type="button"
-                    className="picker-delete"
-                    aria-label="Delete this image from your gallery"
-                    title="Delete from gallery"
-                    onClick={() => onDeleteImage(img)}
-                  >
-                    ×
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-          {previewUrl ? (
-            <div className="preview">
-              {/* Local object URL or same-origin API route; next/image adds no value for either. */}
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={previewUrl} alt="Selected puzzle preview" />
-            </div>
-          ) : (
-            <p className="picker-hint">
-              {gallery.length > 0
-                ? "Upload a JPEG, PNG, or WebP — or tap one of your previous images to reuse it."
-                : "Upload a JPEG, PNG, or WebP. Images you upload stay in your gallery for reuse."}
-            </p>
-          )}
-        </div>
-
-        <div className="field">
-          <div className="slider-head">
-            <label htmlFor="pieces">Pieces</label>
-            <span className="slider-value">{target}</span>
-          </div>
-          <input
-            id="pieces"
-            type="range"
-            className="pieces-slider"
-            min={MIN_PIECE_COUNT}
-            max={MAX_PIECE_COUNT}
-            step={10}
-            value={target}
-            onChange={(e) => setTarget(Number(e.target.value))}
-          />
-          <div className="slider-note">
-            {grid !== null ? (
-              grid.rows * grid.cols === target ? (
-                <>
-                  Exactly <strong>{target}</strong> pieces ({grid.cols} × {grid.rows})
-                </>
-              ) : (
-                <>
-                  You&apos;ll get <strong>{grid.rows * grid.cols}</strong> pieces ({grid.cols} ×{" "}
-                  {grid.rows}) — the closest clean fit for this image
-                </>
-              )
-            ) : (
-              "Pick an image to see the exact piece count for its shape."
-            )}
-          </div>
-        </div>
-
-        <button className="create-btn" disabled={(!file && !galleryPick) || submitting} onClick={onCreate}>
-          {submitting ? "Creating…" : "Create puzzle"}
-        </button>
-
-        {error && <div className="error-banner">{error}</div>}
+      <div className="home-toggle">
+        <ThemeSwitch />
       </div>
 
-      {sessions.length > 0 && (
-        <div className="sessions-card">
-          <h2>Your puzzles</h2>
-          <ul className="sessions-list">
-            {sessions.map((s) => (
-              <SessionRow
-                key={s.roomId}
-                session={s}
-                onOpen={() => router.push(`/room/${encodeURIComponent(s.roomId)}`)}
-                onRename={(name) => onRenameSession(s.roomId, name)}
-              />
-            ))}
-          </ul>
-        </div>
-      )}
+      <div className="home-layout">
+        <section className="slip">
+          <div className="slip-head">
+            <div>
+              <h1>PuzzleWithMe</h1>
+              <p className="slip-tagline">one jigsaw, as many hands as you like</p>
+            </div>
+            <div className="slip-stamp" aria-hidden="true">
+              ORDER
+              <br />
+              SLIP
+            </div>
+          </div>
 
-      {userId !== null && <IdentityCard userId={userId} />}
+          <div className="step">
+            <div className="step-title">
+              <span className="step-num" aria-hidden="true">
+                01
+              </span>
+              <span className="step-label" id="image-picker-label">
+                Choose your picture
+              </span>
+            </div>
+            {/* The real input stays hidden; the upload tile below triggers it so
+                new-upload and reuse-from-gallery are peers in one picker. */}
+            <input
+              type="file"
+              ref={fileInputRef}
+              accept={ACCEPTED.join(",")}
+              style={{ display: "none" }}
+              onChange={(e) => onPick(e.target.files?.[0] ?? null)}
+            />
+            <div className="picker-grid" role="group" aria-labelledby="image-picker-label">
+              <button
+                type="button"
+                className={
+                  file !== null
+                    ? "picker-tile picker-upload picker-tile--selected"
+                    : "picker-tile picker-upload"
+                }
+                onClick={() => fileInputRef.current?.click()}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  onPick(e.dataTransfer.files?.[0] ?? null);
+                }}
+              >
+                {file !== null && previewUrl !== null ? (
+                  // The picked file's own thumbnail: with no separate preview
+                  // pane, the selected tile is the only confirmation of what
+                  // you're about to brew.
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={previewUrl} alt={`Selected: ${file.name}`} />
+                ) : (
+                  <>
+                    <span className="picker-upload-plus" aria-hidden="true">
+                      ＋
+                    </span>
+                    <span className="picker-upload-text">Upload</span>
+                  </>
+                )}
+              </button>
+              {gallery.map((img) => {
+                const selected = galleryPick?.imageId === img.imageId;
+                return (
+                  <div key={img.imageId} className="picker-item">
+                    <button
+                      type="button"
+                      className={
+                        selected ? "picker-tile picker-photo picker-tile--selected" : "picker-tile picker-photo"
+                      }
+                      aria-pressed={selected}
+                      aria-label="Use this image for a new puzzle"
+                      onClick={() => onPickFromGallery(img)}
+                    >
+                      {/* Same-origin API thumbnail; next/image adds no value here. */}
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={`${apiBase}/api/images/${encodeURIComponent(img.imageId)}`} alt="" loading="lazy" />
+                    </button>
+                    <button
+                      type="button"
+                      className="picker-delete"
+                      aria-label="Delete this image from your gallery"
+                      title="Delete from gallery"
+                      onClick={() => onDeleteImage(img)}
+                    >
+                      ×
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="step">
+            <div className="step-head">
+              <div className="step-title">
+                <span className="step-num" aria-hidden="true">
+                  02
+                </span>
+                <label className="step-label" htmlFor="pieces">
+                  How many pieces
+                </label>
+              </div>
+              <span className="slider-value">{pieces}</span>
+            </div>
+            <input
+              id="pieces"
+              type="range"
+              className="pieces-slider"
+              min={MIN_PIECE_COUNT}
+              max={MAX_PIECE_COUNT}
+              step={10}
+              value={target}
+              onChange={(e) => setTarget(Number(e.target.value))}
+            />
+            <div className="slider-note">
+              {grid !== null ? (
+                grid.rows * grid.cols === target ? (
+                  <>
+                    Exactly <strong>{target}</strong> — {grid.cols} × {grid.rows}.
+                  </>
+                ) : (
+                  <>
+                    Closest clean fit for this picture — {grid.cols} × {grid.rows}.
+                  </>
+                )
+              ) : (
+                "Pick a picture to see the exact count for its shape."
+              )}
+            </div>
+          </div>
+
+          <button className="brew-btn" disabled={(!file && !galleryPick) || submitting} onClick={onCreate}>
+            {submitting ? "Brewing…" : "Brew this puzzle →"}
+          </button>
+
+          {error ? (
+            <div className="error-banner">{error}</div>
+          ) : (
+            <p className="slip-foot">then send the link to whoever you want at the table</p>
+          )}
+        </section>
+
+        <aside className="side-col">
+          {sessions.length > 0 && (
+            <>
+              <div className="side-head">left on the table…</div>
+              <ul className="sessions-list">
+                {sessions.map((s) => (
+                  <SessionRow
+                    key={s.roomId}
+                    session={s}
+                    onOpen={() => router.push(`/room/${encodeURIComponent(s.roomId)}`)}
+                    onRename={(name) => onRenameSession(s.roomId, name)}
+                  />
+                ))}
+              </ul>
+            </>
+          )}
+          {userId !== null && <Identity userId={userId} />}
+        </aside>
+      </div>
+
+      <Cup className="home-cup" />
     </main>
   );
 }
@@ -422,7 +458,7 @@ function SessionRow({
   return (
     <li className="session-row">
       <div
-        className="session-main"
+        className="session-card"
         role="button"
         tabIndex={0}
         onClick={editing ? undefined : onOpen}
@@ -430,7 +466,12 @@ function SessionRow({
           if (!editing && (e.key === "Enter" || e.key === " ")) onOpen();
         }}
       >
-        <div className="session-head">
+        <div className="session-thumb">
+          {/* Same-origin room image; next/image adds no value for an API route. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={roomImageUrl(session.roomId)} alt="" loading="lazy" />
+        </div>
+        <div className="session-main">
           {editing ? (
             <input
               className="session-name-input"
@@ -453,17 +494,17 @@ function SessionRow({
           ) : (
             <span className="session-name">
               {session.name ?? fallbackTitle}
-              {session.status === "completed" && <span className="session-done"> · done</span>}
+              {session.status === "completed" && <span className="session-done"> · finished</span>}
             </span>
           )}
-          <span className="session-count">
-            {session.placedPieces} / {session.totalPieces}
+          <div className="session-bar">
+            <div className="session-bar-fill" style={{ width: `${pct}%` }} />
+          </div>
+          <span className="session-meta">
+            {session.placedPieces} of {session.totalPieces} ·{" "}
+            {new Date(session.lastActiveAt).toLocaleString()}
           </span>
         </div>
-        <div className="session-bar">
-          <div className="session-bar-fill" style={{ width: `${pct}%` }} />
-        </div>
-        <span className="session-when">{new Date(session.lastActiveAt).toLocaleString()}</span>
       </div>
       <button
         type="button"
@@ -481,8 +522,15 @@ function SessionRow({
   );
 }
 
-function IdentityCard({ userId }: { userId: string }) {
+/**
+ * Your name at this café: a pill you click to rename, with the permanent
+ * player ID tucked behind an "ID" disclosure — it can't be changed and only
+ * matters when something needs identifying, so it stays out of the way.
+ */
+function Identity({ userId }: { userId: string }) {
   const [copied, setCopied] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [idOpen, setIdOpen] = useState(false);
 
   // Server truth for the display name, keyed by userId. The GET is
   // get-or-create: a first-ever visit comes back with a freshly minted random
@@ -520,6 +568,7 @@ function IdentityCard({ userId }: { userId: string }) {
   }, [userId]);
 
   async function commitName(): Promise<void> {
+    setEditing(false);
     const trimmed = nameDraft.trim();
     if (trimmed === "" || trimmed === (savedName ?? "")) {
       setNameDraft(savedName ?? "");
@@ -545,46 +594,61 @@ function IdentityCard({ userId }: { userId: string }) {
   }
 
   return (
-    <div className="identity-card">
-      <h2>You</h2>
-
-      <div className="identity-section">
-        <label className="identity-label" htmlFor="display-name">
-          Display name
-        </label>
-        <input
-          id="display-name"
-          className="identity-name-input"
-          value={nameDraft}
-          maxLength={MAX_NAME_LENGTH}
-          placeholder="Pick a name"
-          onChange={(e) => {
-            setNameDraft(e.target.value);
-            setNameStatus("idle");
-          }}
-          onBlur={commitName}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") e.currentTarget.blur();
-          }}
-        />
-        <p className="identity-hint">
-          Shown to other players in every room. Change it any time — rooms you&apos;re already in
-          keep your old name until you rejoin, since it&apos;s applied at join time.
-        </p>
-        {nameStatus === "saved" && <span className="identity-status">Saved</span>}
-        {nameStatus === "error" && (
-          <span className="identity-status identity-status--error">Couldn&apos;t save</span>
+    <div className="identity">
+      <div className="identity-pill">
+        <span className="pill-dot" aria-hidden="true" />
+        {editing ? (
+          <input
+            className="pill-name-input"
+            aria-label="Your display name"
+            autoFocus
+            value={nameDraft}
+            maxLength={MAX_NAME_LENGTH}
+            placeholder="Pick a name"
+            onChange={(e) => {
+              setNameDraft(e.target.value);
+              setNameStatus("idle");
+            }}
+            onBlur={commitName}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") e.currentTarget.blur();
+              if (e.key === "Escape") {
+                setNameDraft(savedName ?? "");
+                setEditing(false);
+              }
+            }}
+          />
+        ) : (
+          <button
+            type="button"
+            className="pill-name"
+            title="Click to rename — rooms you're already in keep your old name until you rejoin"
+            onClick={() => setEditing(true)}
+          >
+            {savedName ?? "Pick a name"}
+          </button>
         )}
+        <span className="pill-note">· your name at this café</span>
+        <button
+          type="button"
+          className="pill-id-btn"
+          aria-expanded={idOpen}
+          onClick={() => setIdOpen((v) => !v)}
+        >
+          ID
+        </button>
       </div>
 
-      <div className="identity-section identity-section--secondary">
-        <span className="identity-label">Player ID</span>
-        <p className="identity-hint">
-          The permanent ID your puzzles are tied to — it identifies this browser and can&apos;t be
-          changed. Your display name is what everyone sees.
-        </p>
-        <div className="identity-row">
-          <code className="identity-id">{userId}</code>
+      {nameStatus === "saved" && <span className="identity-status">Saved</span>}
+      {nameStatus === "error" && (
+        <span className="identity-status identity-status--error">Couldn&apos;t save</span>
+      )}
+
+      {idOpen && (
+        <div className="identity-id-row">
+          <code className="identity-id" title="The permanent ID your puzzles are tied to">
+            {userId}
+          </code>
           <button
             type="button"
             className="identity-btn"
@@ -601,7 +665,7 @@ function IdentityCard({ userId }: { userId: string }) {
             {copied ? "Copied" : "Copy"}
           </button>
         </div>
-      </div>
+      )}
     </div>
   );
 }

@@ -1,5 +1,6 @@
-import { boardBounds, CELL_SIZE } from "@puzzlewithme/geometry";
+import { CELL_SIZE, matBounds, scatterBounds } from "@puzzlewithme/geometry";
 import {
+  BOARD_FIT_TRAY_INSET_PX,
   MAX_ZOOM_CELL_FILL,
   MIN_ZOOM_BOARD_MARGIN,
   PAN_OVERSCROLL_PX,
@@ -34,12 +35,27 @@ export function screenToWorld(cam: Camera, sx: number, sy: number): { x: number;
   return { x: (sx - cam.x) / cam.scale, y: (sy - cam.y) / cam.scale };
 }
 
-/** Smallest scale that still fits the whole board in the viewport (FR-27). */
+/**
+ * The area the mat is fit and centered in: the viewport minus the band the
+ * tray occupies along the bottom. Panning still uses the full viewport, so
+ * pieces can be dragged under the tray and back out — this only keeps the
+ * fit-to-screen view from placing the mat's hem against it.
+ */
+function fitBox(vp: Viewport): Viewport {
+  return { width: vp.width, height: Math.max(1, vp.height - BOARD_FIT_TRAY_INSET_PX) };
+}
+
+/**
+ * Smallest scale that still fits the whole mat in the clear area (FR-27 "see
+ * the whole board at once" — the mat contains the scatter area, so fitting it
+ * fits every piece).
+ */
 export function minScale(rows: number, cols: number, vp: Viewport): number {
-  const b = boardBounds(rows, cols);
+  const b = matBounds(rows, cols);
   const bw = b.maxX - b.minX;
   const bh = b.maxY - b.minY;
-  const fit = Math.min(vp.width / bw, vp.height / bh) * MIN_ZOOM_BOARD_MARGIN;
+  const box = fitBox(vp);
+  const fit = Math.min(box.width / bw, box.height / bh) * MIN_ZOOM_BOARD_MARGIN;
   // Guard against a zero-sized viewport during first layout.
   return fit > 0 ? fit : 0.01;
 }
@@ -57,14 +73,14 @@ export function clampScale(scale: number, rows: number, cols: number, vp: Viewpo
 }
 
 /**
- * Clamp the pan offset so the board can't be dragged entirely out of view
+ * Clamp the pan offset so the mat can't be dragged entirely out of view
  * (FR-26 "within the board bounds"), while still leaving PAN_OVERSCROLL_PX of
  * slack on every side (see constants.ts) so the camera always has *some* pan
- * range to escape fixed UI overlays, even on axes where the board is smaller
+ * range to escape fixed UI overlays, even on axes where the mat is smaller
  * than the viewport.
  */
 export function clampCamera(cam: Camera, rows: number, cols: number, vp: Viewport): Camera {
-  const b = boardBounds(rows, cols);
+  const b = matBounds(rows, cols);
   const worldW = (b.maxX - b.minX) * cam.scale;
   const worldH = (b.maxY - b.minY) * cam.scale;
 
@@ -82,7 +98,7 @@ export function clampCamera(cam: Camera, rows: number, cols: number, vp: Viewpor
 }
 
 /**
- * Clamp one axis's board-edge screen position. The board's near edge may
+ * Clamp one axis's mat-edge screen position. The mat's near edge may
  * range between flush-far and flush-near (whichever order `worldSize` vs.
  * `vpSize` puts them in), expanded by PAN_OVERSCROLL_PX on each end.
  */
@@ -92,14 +108,23 @@ function clampEdge(edge: number, worldSize: number, vpSize: number): number {
   return Math.min(hi, Math.max(lo, edge));
 }
 
-/** Initial camera: whole board fit, centered. */
+/**
+ * Initial camera: the pieces and the frame they ring, centered in the area
+ * above the tray. Fits scatterBounds rather than the whole mat, because the mat
+ * is always landscape while the work is the picture's shape — fitting the cloth
+ * on a tall phone screen shrank the pieces to specks between two bands of empty
+ * table. The mat's spare corners are still reachable, just by zooming out
+ * (minScale) or panning, rather than being on screen from the first frame.
+ */
 export function fitCamera(rows: number, cols: number, vp: Viewport): Camera {
-  const scale = minScale(rows, cols, vp);
-  const b = boardBounds(rows, cols);
-  const worldW = (b.maxX - b.minX) * scale;
-  const worldH = (b.maxY - b.minY) * scale;
-  const x = (vp.width - worldW) / 2 - b.minX * scale;
-  const y = (vp.height - worldH) / 2 - b.minY * scale;
+  const b = scatterBounds(rows, cols);
+  const box = fitBox(vp);
+  const bw = b.maxX - b.minX;
+  const bh = b.maxY - b.minY;
+  const fit = Math.min(box.width / bw, box.height / bh) * MIN_ZOOM_BOARD_MARGIN;
+  const scale = clampScale(fit > 0 ? fit : 0.01, rows, cols, vp);
+  const x = (box.width - bw * scale) / 2 - b.minX * scale;
+  const y = (box.height - bh * scale) / 2 - b.minY * scale;
   return { x, y, scale };
 }
 

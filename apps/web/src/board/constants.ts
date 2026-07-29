@@ -39,8 +39,62 @@ export const MAX_TILE_PX = 128;
  * comfortable fraction of the viewport (FR-27 "comfortable working size").
  */
 export const MIN_ZOOM_BOARD_MARGIN = 0.92;
+
+/**
+ * Screen pixels held clear below the board when fitting it, so the fit view
+ * never butts the mat's hem up against the tray. Sized from the tray's own
+ * geometry in globals.css (.room-menu: 24px bottom inset + 9px padding + a
+ * 42px button + 9px padding = 84px) plus ~20px of visible table between the
+ * two. Only the tray gets this clearance: the floating paper (brew slip,
+ * players card) is meant to lie ON the mat, so it keeps overlapping.
+ */
+export const BOARD_FIT_TRAY_INSET_PX = 104;
 /** A single cell fills this fraction of the smaller viewport dimension at max zoom. */
 export const MAX_ZOOM_CELL_FILL = 0.45;
+
+/**
+ * How much the mat's linen weave scales with the camera, as an exponent on the
+ * camera scale: 0 pins the texture to screen space (the mat stops reading as
+ * an object lying on the table), 1 locks it to world space (zooming in on a
+ * single piece magnifies a 4-thread weave into burlap). 0.35 keeps the threads
+ * visibly attached to the mat while holding the on-screen pitch to roughly
+ * 1.5–6 px across the whole zoom range. Picked by eye against that range.
+ */
+export const WEAVE_ZOOM_DAMPING = 0.35;
+
+/**
+ * Zoom window over which the weave fades into the mat's flat color, measured
+ * as one cell's on-screen size (CELL_SIZE * camera scale). Below the low end
+ * the thread pitch is finer than the pixel grid, where it reads as moiré
+ * competing with the pieces rather than as cloth; above the high end the mat
+ * is fully woven. The window has to sit under the fit-to-screen zoom of a
+ * mid-size board (~20 px/cell for 100 pieces on a laptop) or the default view
+ * — the one players spend the most time in — would always be flat cloth,
+ * while a 1000-piece board still fits at ~12 px/cell and stays nearly flat.
+ * Derived from those two fit zooms, not measured on-device.
+ */
+export const WEAVE_FADE_MIN_CELL_PX = 10;
+export const WEAVE_FADE_MAX_CELL_PX = 22;
+
+/**
+ * The hem's stitching, in screen pixels: redrawn against the camera so it
+ * reads as the same dashed line at every zoom, the way the weave holds a
+ * near-constant thread pitch. Sized in world units instead, it would be a
+ * sub-pixel hairline at the fit-to-screen zoom where the hem is most visible.
+ * Its POSITION is world-space (the playArea rect from @puzzlewithme/geometry),
+ * so the line a player sees is exactly the limit pieces scatter and clamp to.
+ */
+export const HEM_DASH_PX = 10;
+export const HEM_GAP_PX = 7;
+export const HEM_WIDTH_PX = 1;
+
+/**
+ * Fractional zoom change that triggers a hem redraw. The hem is hundreds of
+ * dash segments, so it is rebuilt on a ratio step rather than every frame of a
+ * pinch; 3% is far below the ~1px of drift a viewer could notice at these
+ * dash sizes. Picked from that visibility floor, not measured.
+ */
+export const HEM_REDRAW_RATIO = 0.03;
 
 /** Wheel zoom multiplier per notch; ~1.0015^deltaY gives smooth trackpad + mouse feel. */
 export const WHEEL_ZOOM_RATE = 0.0015;
@@ -52,11 +106,11 @@ export const WHEEL_ZOOM_RATE = 0.0015;
  * centered position with zero pan range on that axis, so a piece rendered
  * under a fixed corner overlay could never be dragged clear of it by panning
  * alone. Sized to clear the widest such overlay, the PlayersPanel
- * (.players-panel in globals.css: 240px wide, 16px right inset = 256px),
+ * (.players-panel in globals.css: 256px wide, 24px right inset = 280px),
  * rounded up for a small buffer. Guessed from that one measurement, not
  * tuned against other viewport sizes.
  */
-export const PAN_OVERSCROLL_PX = 260;
+export const PAN_OVERSCROLL_PX = 290;
 
 /**
  * Render-time delay for interpolating remotely-held group motion, in ms.

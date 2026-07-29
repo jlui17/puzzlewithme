@@ -12,6 +12,7 @@ Drives the real app (Next.js web + game server + WebSocket sync + PixiJS board) 
 - **Run every `agent-browser` command from the repo root.** `./agent-browser.json` there passes `--use-angle=metal` to Chrome. Without it, headless Chrome falls back to swiftshader WebGL, which deadlocks on the board's `antialias: true` canvas and wedges the whole agent-browser daemon (every later command fails with `Resource temporarily unavailable (os error 35)`).
 - **If the daemon wedges anyway**: `pkill -9 -f agent-browser-darwin; pkill -9 -f "Chrome for Testing"` and start over. `agent-browser close` will hang; don't wait on it.
 - **Screenshot paths must be absolute.** A relative path silently lands in `~/.agent-browser/tmp/screenshots/` instead.
+- **A page with an `<img>` on it wedges `screenshot` and `eval`.** Once an image element starts loading (gallery tiles, session thumbnails, the finish print, `upload` of the fixture), `Page.captureScreenshot` returns `Internal error` and `Runtime.evaluate` times out; the images sit at `complete: false` forever even though the endpoint serves them fine over curl. Reproduced on unmodified `main`, so it is the harness, not the app. Screenshot only image-free surfaces (the board is a canvas, and a fresh session's home has no gallery); verify image-bearing states through `eval` on the DOM before the first screenshot attempt wedges the daemon.
 
 ## Stack lifecycle
 
@@ -23,7 +24,7 @@ scripts/e2e-env.sh status
 scripts/e2e-env.sh reset            # stop, then wipe
 ```
 
-State lives in gitignored `.e2e/data` (SQLite db + uploads) and survives a stop/start, so rooms and gallery images from an earlier run are still there when you come back. Nothing touches the real dev DB or S3 either way. Use `--fresh` when leftovers would confuse the check — anything reading the home gallery or a room list — or when you want to prove first-run behavior. Logs: `.e2e/server.log`, `.e2e/web.log`. `start` warms the `/` and `/room/[id]` dev compiles so the browser never waits on them.
+State lives in gitignored `.e2e/data` (SQLite db + uploads) and survives a stop/start, so rooms and gallery images from an earlier run are still there when you come back. Nothing touches the real dev DB or S3 either way. Use `--fresh` when leftovers would confuse the check — anything reading the home gallery or a room list — or when you want to prove first-run behavior. The web compile is isolated too, via `NEXT_DIST_DIR=.next-e2e`: `NEXT_PUBLIC_SERVER_URL` is inlined at compile time, so a shared `.next` would hand dev's browsers a bundle pointed at this stack's server, where none of dev's rooms exist. Logs: `.e2e/server.log`, `.e2e/web.log`. `start` warms the `/` and `/room/[id]` dev compiles so the browser never waits on them.
 
 ## Fixture image
 
@@ -39,8 +40,8 @@ bun scripts/make-test-image.mjs         # writes .e2e/fixture.png
 agent-browser open http://localhost:3100
 agent-browser wait --text "PuzzleWithMe"
 agent-browser upload 'input[type=file]' .e2e/fixture.png   # the file input is hidden; CSS selector works anyway
-agent-browser wait --text "fixture.png"
-agent-browser find role button click --name "Create puzzle"
+agent-browser wait --text "Closest clean fit"   # the slip's step-02 note, which only appears once the picked image has been measured
+agent-browser find role button click --name "Brew this puzzle →"
 agent-browser wait --url "**/room/**"
 sleep 5    # board boot: image fetch + atlas build + WS join; no DOM signal marks it done
 agent-browser screenshot /abs/path/board.png
@@ -71,8 +72,8 @@ agent-browser mouse up
 ```
 
 DOM-verifiable signals (these ARE in `snapshot` / `wait --text`):
-- Progress panel: `N / M` placed count and the player list with display names.
-- Bottom bar buttons: `🖼️ Preview`, `👥 Hide players`, `🏠 Menu`.
+- Brew slip (top left): `N of M pieces placed`. Players card (top right, "At the table"): display names and per-player counts.
+- Tray buttons: `See the picture`, `Hide who's here`, `Switch to night` (the theme switch names the light it will change to, so it reads `Switch to day` once it's night), `Head out`.
 - Append `?debug=1` to the room URL for the sync-diagnostics overlay (message counts per type).
 
 A drag that survives `mouse up` (piece stays where dropped in the next screenshot) proves the full grab→move→drop round trip through the server, not just local rendering.

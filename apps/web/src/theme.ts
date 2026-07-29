@@ -3,88 +3,81 @@
  * `:root[data-theme=...]` blocks in globals.css; the board canvas can't use CSS
  * variables, so each theme also carries its board colors here as 0xRRGGBB ints.
  * The two must stay in sync by hand: each BoardTheme mirrors the same-named
- * CSS block's background/border tones.
+ * CSS block's mat/border tones.
+ *
+ * The Pixi app runs with a transparent background — the walnut table behind it
+ * is a CSS layer (.table in globals.css), so no canvas color lives here.
  */
 
+/**
+ * The two tones a linen thread is drawn from. Canvas fill styles, not Pixi
+ * ints, because the weave is baked to a texture on a 2D canvas (board/linen.ts)
+ * — they carry alpha, and they sit over `mat` rather than replacing it.
+ */
+export interface LinenWeave {
+  /** Between the threads. */
+  shadow: string;
+  /** The lit side of each thread. */
+  highlight: string;
+}
+
 export interface BoardTheme {
-  /** Pixi Application background — the "table" the pieces scatter on. */
-  canvas: number;
-  /** Scatter-area rect behind the board (slightly recessed from the table). */
-  well: number;
-  wellAlpha: number;
+  /** Linen mat the puzzle is laid out on, over the table. */
+  mat: number;
+  matAlpha: number;
+  weave: LinenWeave;
+  /** Dashed stitch line inset from the mat's hem. */
+  stitch: number;
   /** Board outline stroke + faint board fill tint. */
   frameStroke: number;
-  /** Pill behind remote players' cursor name labels; text on it is white. */
-  cursorLabelBg: number;
+  /** Text on remote players' cursor name pills, which take the player's color. */
+  cursorLabelText: number;
 }
 
 export interface Theme {
   id: string;
-  /** Menu label, e.g. "Latte". */
+  /** Toggle label, e.g. "Day". */
   label: string;
-  /** One emoji for compact toggles (room menu bar). */
+  /** One glyph for the segmented day/night control. */
   emoji: string;
   board: BoardTheme;
 }
 
 /*
- * Palettes picked by eye around a café-menu concept: warm low-saturation
- * neutrals, one muted accent per theme, nothing neon. Board colors sit a step
- * darker than the page background so the play area reads as a table surface,
- * with the well a step darker again. Not derived from any formula.
+ * Two lights on one café table: daylight and lamplight. Mat and stroke mirror
+ * the linen-mat colors the design draws on the walnut (globals.css .table),
+ * a step lighter than the wood so the play area reads as cloth on furniture.
  */
 export const THEMES: readonly Theme[] = [
   {
-    id: "latte",
-    label: "Latte",
-    emoji: "🥛",
+    id: "day",
+    label: "Day",
+    emoji: "☀",
     board: {
-      canvas: 0xede3d3,
-      well: 0xe0d2bb,
-      wellAlpha: 0.55,
-      frameStroke: 0xc4ad8e,
-      cursorLabelBg: 0x46392e,
+      mat: 0xdccaa4,
+      matAlpha: 1,
+      weave: { shadow: "rgba(150,124,84,0.16)", highlight: "rgba(255,247,230,0.18)" },
+      stitch: 0x78603c,
+      frameStroke: 0x5a4426,
+      cursorLabelText: 0xfff8ef,
     },
   },
   {
-    id: "matcha",
-    label: "Matcha",
-    emoji: "🍵",
+    id: "night",
+    label: "Night",
+    emoji: "☾",
     board: {
-      canvas: 0xe4ead4,
-      well: 0xd6dfc0,
-      wellAlpha: 0.55,
-      frameStroke: 0xafbe93,
-      cursorLabelBg: 0x3c4636,
-    },
-  },
-  {
-    id: "taro",
-    label: "Taro",
-    emoji: "🧋",
-    board: {
-      canvas: 0xe7e1f0,
-      well: 0xdad0e9,
-      wellAlpha: 0.55,
-      frameStroke: 0xb5a3d2,
-      cursorLabelBg: 0x453e56,
-    },
-  },
-  {
-    id: "espresso",
-    label: "Espresso",
-    emoji: "🌙",
-    board: {
-      canvas: 0x211c15,
-      well: 0x17130d,
-      wellAlpha: 0.6,
-      frameStroke: 0x5b4c3b,
-      cursorLabelBg: 0x37302a,
+      mat: 0x8e7d5f,
+      matAlpha: 1,
+      weave: { shadow: "rgba(30,20,8,0.22)", highlight: "rgba(255,235,200,0.07)" },
+      stitch: 0x281c0c,
+      frameStroke: 0x1e1408,
+      cursorLabelText: 0x12202f,
     },
   },
 ];
 
-export const DEFAULT_THEME_ID = "latte";
+export const DEFAULT_THEME_ID = "day";
 
 /** Also referenced verbatim by the no-flash inline script in app/layout.tsx. */
 export const THEME_STORAGE_KEY = "pwm-theme";

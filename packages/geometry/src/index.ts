@@ -12,9 +12,12 @@
 export const PACKAGE_NAME = "@puzzlewithme/geometry";
 
 export {
-  BOARD_SIZE_MULTIPLIER,
   CELL_SIZE,
   DEFAULT_SNAP_TOLERANCE,
+  MAT_ASPECT,
+  MAT_HEM_INSET_RATIO,
+  SCATTER_PITCH_CELLS,
+  SCATTER_ROOM_FACTOR,
   TAB_ASYMMETRY_JITTER,
   TAB_BULB_HALF_RATIO,
   TAB_HEIGHT_RATIO,
@@ -61,6 +64,6 @@ export {
   type EdgeOrientation,
 } from "./path.js";
 
-export { boardBounds, initialScatter } from "./scatter.js";
+export { initialScatter, matBounds, playArea, scatterBounds, type Bounds } from "./scatter.js";
 
 export { clampGroupToBoard, evaluateSnap } from "./snap.js";

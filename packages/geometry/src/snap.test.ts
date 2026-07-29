@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  boardBounds,
+  playArea,
   clampGroupToBoard,
   DEFAULT_SNAP_TOLERANCE,
   evaluateSnap,
@@ -103,11 +103,11 @@ describe("evaluateSnap: locked groups are immovable", () => {
 });
 
 describe("evaluateSnap: bounds clamp", () => {
-  it("clamps a drop beyond the board edge (FR-15)", () => {
+  it("clamps a drop beyond the mat's hem (FR-15)", () => {
     const groups = [group("g0", [0], 0, 0)];
     const out = snap(groups, "g0", 5000, 5000);
-    const bounds = boardBounds(ROWS, COLS);
-    // Footprint stays inside the board.
+    const bounds = playArea(ROWS, COLS);
+    // Footprint stays inside the play area.
     expect(out.finalPosition.x).toBeLessThanOrEqual(bounds.maxX);
     expect(out.finalPosition.y).toBeLessThanOrEqual(bounds.maxY);
     expect(out.merged).toBe(false);
@@ -116,7 +116,7 @@ describe("evaluateSnap: bounds clamp", () => {
 
   it("clampGroupToBoard keeps a multi-piece group's footprint inside", () => {
     const clamped = clampGroupToBoard({ x: -9999, y: -9999 }, [0, 1, 2], ROWS, COLS);
-    const bounds = boardBounds(ROWS, COLS);
+    const bounds = playArea(ROWS, COLS);
     expect(clamped.x).toBeGreaterThanOrEqual(bounds.minX);
     expect(clamped.y).toBeGreaterThanOrEqual(bounds.minY);
   });

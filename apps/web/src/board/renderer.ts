@@ -1,6 +1,6 @@
-import { boardBounds, CELL_SIZE, framePosition, type Puzzle } from "@puzzlewithme/geometry";
+import { CELL_SIZE, framePosition, matBounds, playArea, type Puzzle } from "@puzzlewithme/geometry";
 import type { BoardState, Clock, MotionState, RenderGroup, Vec2 } from "../sync";
-import { Application, Container, Graphics, Sprite, Text } from "pixi.js";
+import { Application, Container, Graphics, Sprite, Text, TilingSprite, type Texture } from "pixi.js";
 import type { AtlasResult } from "./atlas";
 import {
   type Camera,
@@ -9,7 +9,18 @@ import {
   screenToWorld,
   worldToScreen,
 } from "./camera";
-import { CURSOR_INTERP_DELAY_MS, INTERP_DELAY_MS } from "./constants";
+import {
+  CURSOR_INTERP_DELAY_MS,
+  INTERP_DELAY_MS,
+  HEM_DASH_PX,
+  HEM_GAP_PX,
+  HEM_REDRAW_RATIO,
+  HEM_WIDTH_PX,
+  WEAVE_FADE_MAX_CELL_PX,
+  WEAVE_FADE_MIN_CELL_PX,
+  WEAVE_ZOOM_DAMPING,
+} from "./constants";
+import { buildLinenTexture } from "./linen";
 import { pointInPolygon } from "./hit-test";
 import { currentTheme, type BoardTheme } from "../theme";
 
@@ -74,6 +85,8 @@ interface CursorNode {
   pointer: Graphics;
   label: Text;
   labelBg: Graphics;
+  /** The owning player's color, so the pill can be redrawn without the store. */
+  color: number;
 }
 
 /**
@@ -96,6 +109,14 @@ export class BoardRenderer {
   private readonly viewport = new Container();
   private readonly groupLayer = new Container();
   private readonly cursorLayer = new Container();
+  /** The mat's shadow on the table, its cloth color, and its hem. */
+  private readonly mat = new Graphics();
+  /** The woven texture, sampled over the mat; see applyWeave for its scale. */
+  private matWeave: TilingSprite | null = null;
+  private matTexture: Texture | null = null;
+  /** The mat's stitched hem, and the camera scale it was last drawn for. */
+  private readonly hem = new Graphics();
+  private hemScale = 0;
   private readonly frame = new Graphics();
   private readonly nodes = new Map<string, GroupNode>();
   private readonly cursors = new Map<string, CursorNode>();
@@ -120,14 +141,22 @@ export class BoardRenderer {
     private readonly clock: Clock,
     private readonly getState: () => BoardState,
   ) {
+    // Before the layers: buildWeave sizes the weave against the camera.
+    this.camera = fitCamera(puzzle.rows, puzzle.cols, this.viewport_size());
+
     this.app.stage.addChild(this.viewport);
+    // Table up: the mat's shadow and cloth, its weave, the board outline, then
+    // the pieces on top of all of it.
+    this.viewport.addChild(this.mat);
+    this.buildWeave();
+    this.viewport.addChild(this.hem);
     this.viewport.addChild(this.frame);
     this.viewport.addChild(this.groupLayer);
     // Cursors live in screen space (constant label size regardless of zoom).
     this.app.stage.addChild(this.cursorLayer);
 
+    this.drawMat();
     this.drawFrame();
-    this.camera = fitCamera(puzzle.rows, puzzle.cols, this.viewport_size());
     this.applyCamera();
     this.app.ticker.add(this.tick);
 
@@ -156,37 +185,138 @@ export class BoardRenderer {
     return { width: this.app.screen.width, height: this.app.screen.height };
   }
 
-  /** Subtle frame outline + faint board-bounds rect on the table (FR-8). */
+  /**
+   * The mat as a piece of cloth lying on the walnut: a soft shadow under its
+   * edges, the cloth itself with rounded corners, a lit top hem, and a dashed
+   * stitch line inset from the edge. Everything is sized off CELL_SIZE so a
+   * 20-piece and a 1000-piece board get proportionally the same mat.
+   */
+  private drawMat(): void {
+    const b = matBounds(this.puzzle.rows, this.puzzle.cols);
+    const w = b.maxX - b.minX;
+    const h = b.maxY - b.minY;
+    const radius = CELL_SIZE * 0.08;
+    this.mat.clear();
+    // Four nested rects standing in for a blur: each step out is bigger,
+    // fainter, and dropped a little further, which is as close to
+    // `0 20px 40px` as Graphics gets without a filter pass every frame.
+    for (let i = 4; i >= 1; i--) {
+      const spread = CELL_SIZE * 0.14 * i;
+      const drop = CELL_SIZE * 0.05 * i;
+      this.mat
+        .roundRect(b.minX - spread, b.minY - spread + drop, w + spread * 2, h + spread * 2, radius + spread)
+        .fill({ color: 0x140a02, alpha: 0.1 });
+    }
+    this.mat
+      .roundRect(b.minX, b.minY, w, h, radius)
+      .fill({ color: this.theme.mat, alpha: this.theme.matAlpha })
+      .stroke({ width: CELL_SIZE * 0.012, color: 0xffffff, alpha: 0.16, alignment: 1 });
+  }
+
+  /** Subtle frame outline + faint board-bounds rect on the mat (FR-8). */
   private drawFrame(): void {
     const { rows, cols } = this.puzzle;
-    const b = boardBounds(rows, cols);
     this.frame.clear();
-    this.frame
-      .rect(b.minX, b.minY, b.maxX - b.minX, b.maxY - b.minY)
-      .fill({ color: this.theme.well, alpha: this.theme.wellAlpha });
     this.frame
       .rect(0, 0, cols * CELL_SIZE, rows * CELL_SIZE)
       .fill({ color: 0xffffff, alpha: 0.02 })
       .stroke({ width: 2, color: this.theme.frameStroke, alpha: 0.9, alignment: 0.5 });
   }
 
+  /**
+   * The stitched hem, traced on the playArea rect — the same rect scatter fills
+   * and the server clamps drops to, so the line is the boundary rather than a
+   * decoration near it. Only the dash and stroke are screen sizes divided back
+   * into world units (so the stitching looks the same at every zoom), which is
+   * what makes this camera-dependent and redrawn from applyWeave.
+   */
+  private drawHem(): void {
+    const scale = this.camera.scale;
+    this.hemScale = scale;
+    const b = playArea(this.puzzle.rows, this.puzzle.cols);
+    const dash = HEM_DASH_PX / scale;
+    const step = dash + HEM_GAP_PX / scale;
+    const x = b.minX;
+    const y = b.minY;
+    const w = b.maxX - b.minX;
+    const h = b.maxY - b.minY;
+    this.hem.clear();
+    const run = (fromX: number, fromY: number, dx: number, dy: number, length: number): void => {
+      for (let at = 0; at < length; at += step) {
+        const end = Math.min(at + dash, length);
+        this.hem.moveTo(fromX + dx * at, fromY + dy * at).lineTo(fromX + dx * end, fromY + dy * end);
+      }
+    };
+    run(x, y, 1, 0, w);
+    run(x + w, y, 0, 1, h);
+    run(x + w, y + h, -1, 0, w);
+    run(x, y + h, 0, -1, h);
+    this.hem.stroke({ width: HEM_WIDTH_PX / scale, color: this.theme.stitch, alpha: 0.4 });
+  }
+
+  /** Bakes the weave swatch for the active theme and lays it over the mat. */
+  private buildWeave(): void {
+    const b = matBounds(this.puzzle.rows, this.puzzle.cols);
+    this.matTexture?.destroy(true);
+    this.matTexture = buildLinenTexture(this.theme.weave);
+    if (this.matWeave) {
+      this.matWeave.texture = this.matTexture;
+    } else {
+      this.matWeave = new TilingSprite({
+        texture: this.matTexture,
+        x: b.minX,
+        y: b.minY,
+        width: b.maxX - b.minX,
+        height: b.maxY - b.minY,
+      });
+      this.viewport.addChild(this.matWeave);
+    }
+    this.applyWeave();
+  }
+
+  /**
+   * Scales and fades the weave against the current zoom. The texture is damped
+   * rather than locked to either space (WEAVE_ZOOM_DAMPING), and dissolves into
+   * the mat's flat color once a cell is small enough that the threads would
+   * alias (WEAVE_FADE_*_CELL_PX) — at 1000 pieces the mat has to stay quiet
+   * under the pieces, and a sub-pixel weave is the loudest thing it could do.
+   */
+  private applyWeave(): void {
+    if (!this.matWeave) return;
+    const scale = this.camera.scale;
+    this.matWeave.tileScale.set(Math.pow(scale, WEAVE_ZOOM_DAMPING - 1));
+    const cellPx = CELL_SIZE * scale;
+    const t = (cellPx - WEAVE_FADE_MIN_CELL_PX) / (WEAVE_FADE_MAX_CELL_PX - WEAVE_FADE_MIN_CELL_PX);
+    this.matWeave.alpha = Math.max(0, Math.min(1, t));
+    this.matWeave.visible = this.matWeave.alpha > 0.01;
+    if (scale < this.hemScale * (1 - HEM_REDRAW_RATIO) || scale > this.hemScale * (1 + HEM_REDRAW_RATIO)) {
+      this.drawHem();
+    }
+  }
+
   /** Re-reads the active theme and repaints everything themed in the scene. */
   refreshTheme(): void {
     this.theme = currentTheme().board;
+    this.drawMat();
     this.drawFrame();
+    this.drawHem();
+    this.buildWeave();
     for (const node of this.cursors.values()) this.drawCursorLabelBg(node);
   }
 
+  /** Name pill in the player's own color, so a cursor reads at a glance. */
   private drawCursorLabelBg(node: CursorNode): void {
     node.labelBg
       .clear()
       .roundRect(9, 10, node.label.width + 10, node.label.height + 4, 8)
-      .fill({ color: this.theme.cursorLabelBg, alpha: 0.85 });
+      .fill({ color: node.color, alpha: 0.95 });
+    node.label.style.fill = this.theme.cursorLabelText;
   }
 
   applyCamera(): void {
     this.viewport.position.set(this.camera.x, this.camera.y);
     this.viewport.scale.set(this.camera.scale);
+    this.applyWeave();
   }
 
   setCamera(cam: Camera): void {
@@ -362,8 +492,9 @@ export class BoardRenderer {
       let node = this.cursors.get(cursor.guestId);
       if (!node) node = this.buildCursor(cursor.guestId);
       node.pointer.tint = color;
-      if (node.label.text !== player.name) {
+      if (node.label.text !== player.name || node.color !== color) {
         node.label.text = player.name;
+        node.color = color;
         this.drawCursorLabelBg(node);
       }
       const pos = renderPosition(
@@ -403,13 +534,15 @@ export class BoardRenderer {
     // labelBg before label so the text sits on top of its pill.
     container.addChild(pointer, labelBg, label);
     this.cursorLayer.addChild(container);
-    const node: CursorNode = { container, pointer, label, labelBg };
+    const node: CursorNode = { container, pointer, label, labelBg, color: 0x9aa7b4 };
     this.cursors.set(guestId, node);
     return node;
   }
 
   destroy(): void {
     this.app.ticker.remove(this.tick);
+    this.matTexture?.destroy(true);
+    this.matTexture = null;
     for (const node of this.nodes.values()) node.container.destroy({ children: true });
     for (const node of this.cursors.values()) node.container.destroy({ children: true });
     this.nodes.clear();

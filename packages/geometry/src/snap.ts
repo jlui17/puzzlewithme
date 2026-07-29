@@ -1,6 +1,6 @@
 import { CELL_SIZE, DEFAULT_SNAP_TOLERANCE, TAB_MAX_HEIGHT_RATIO } from "./constants.js";
 import { framePosition, pieceIdToCoord } from "./puzzle.js";
-import { boardBounds } from "./scatter.js";
+import { playArea } from "./scatter.js";
 import type { GroupState, SnapDrop, SnapEvent, SnapOutcome, Vec2 } from "./types.js";
 
 // Uses the worst-case tab extent (TAB_MAX_HEIGHT_RATIO), not the base
@@ -35,8 +35,9 @@ function areGridAdjacent(a: number, b: number, cols: number): boolean {
 
 /**
  * Clamp a group's anchor position so its whole footprint (cells plus tab
- * overhang) stays within the board bounds (FR-15). A drop beyond an edge lands
- * the group against that edge.
+ * overhang) stays within the play area — the mat inside its stitched hem
+ * (FR-15). A drop beyond an edge lands the group against that edge, so a piece
+ * can be put down anywhere on the cloth but never past the dashed line.
  */
 export function clampGroupToBoard(
   position: Vec2,
@@ -45,7 +46,7 @@ export function clampGroupToBoard(
   cols: number,
 ): Vec2 {
   const anchor = anchorOf(pieces);
-  const bounds = boardBounds(rows, cols);
+  const bounds = playArea(rows, cols);
   let minX = Infinity;
   let minY = Infinity;
   let maxX = -Infinity;

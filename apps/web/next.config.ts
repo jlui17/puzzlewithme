@@ -16,6 +16,14 @@ const SERVER_ORIGIN =
   "http://localhost:3001";
 
 const nextConfig: NextConfig = {
+  /**
+   * Two dev servers running from this directory (the normal one and the
+   * e2e stack's) must not share a build dir: NEXT_PUBLIC_SERVER_URL is inlined
+   * into the client bundle at compile time, so whichever compiled last decides
+   * which game server every browser talks to. NEXT_DIST_DIR lets the e2e stack
+   * take its own.
+   */
+  distDir: process.env["NEXT_DIST_DIR"] ?? ".next",
   transpilePackages: ["@puzzlewithme/shared", "@puzzlewithme/geometry"],
   // The workspace packages use NodeNext-style ".js" relative imports in TS
   // source; webpack resolves those literally unless told to try .ts first.
