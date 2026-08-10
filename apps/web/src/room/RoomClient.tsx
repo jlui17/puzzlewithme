@@ -14,7 +14,7 @@ import {
   type ConnectionStatus,
 } from "../sync";
 import { roomImageUrl, wsUrl } from "../config";
-import { Cup, TableProps, TableSurface } from "../table";
+import { Cup, TableSurface } from "../table";
 import { CompletionOverlay, type Contribution } from "./CompletionOverlay";
 import { BrewSlip, PlayersPanel, type PlayerView } from "./PlayersPanel";
 import { RoomMenu } from "./RoomMenu";
@@ -274,7 +274,6 @@ function RoomLive({ settings }: { settings: RoomSettings }) {
   return (
     <div className="room-shell">
       <TableSurface />
-      <TableProps />
       <BoardCanvas sync={sync} settings={settings} interactive={!completed} pointerRef={pointerRef} />
 
       <ConnectionBadge status={panel.connection} />

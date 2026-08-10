@@ -23,6 +23,7 @@ import {
 import { buildLinenTexture } from "./linen";
 import { pointInPolygon } from "./hit-test";
 import { currentTheme, type BoardTheme } from "../theme";
+import { buildTableProps } from "./table-props";
 
 /**
  * Owns the PixiJS scene and drives it straight from the sync store (React state
@@ -107,6 +108,7 @@ export interface SceneDebugStats {
 
 export class BoardRenderer {
   private readonly viewport = new Container();
+  private tableProps: Container;
   private readonly groupLayer = new Container();
   private readonly cursorLayer = new Container();
   /** The mat's shadow on the table, its cloth color, and its hem. */
@@ -143,10 +145,12 @@ export class BoardRenderer {
   ) {
     // Before the layers: buildWeave sizes the weave against the camera.
     this.camera = fitCamera(puzzle.rows, puzzle.cols, this.viewport_size());
+    this.tableProps = buildTableProps(puzzle, currentTheme().id === "night");
 
     this.app.stage.addChild(this.viewport);
     // Table up: the mat's shadow and cloth, its weave, the board outline, then
     // the pieces on top of all of it.
+    this.viewport.addChild(this.tableProps);
     this.viewport.addChild(this.mat);
     this.buildWeave();
     this.viewport.addChild(this.hem);
@@ -297,6 +301,12 @@ export class BoardRenderer {
   /** Re-reads the active theme and repaints everything themed in the scene. */
   refreshTheme(): void {
     this.theme = currentTheme().board;
+    const replacement = buildTableProps(this.puzzle, currentTheme().id === "night");
+    const index = this.viewport.getChildIndex(this.tableProps);
+    this.viewport.removeChild(this.tableProps);
+    this.tableProps.destroy({ children: true });
+    this.tableProps = replacement;
+    this.viewport.addChildAt(this.tableProps, index);
     this.drawMat();
     this.drawFrame();
     this.drawHem();

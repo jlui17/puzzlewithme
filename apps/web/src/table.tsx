@@ -20,31 +20,6 @@ export function TableSurface() {
   );
 }
 
-/**
- * Things left lying on the table around the mat: a mug, a notebook with a pen
- * across it, and an AirPods case. Painted between the table and the board
- * canvas, so the mat covers whichever ones the puzzle's cloth reaches over.
- */
-export function TableProps() {
-  return (
-    <div className="table-props" aria-hidden="true">
-      <div className="prop prop-notebook">
-        <span className="notebook-pages" />
-        <span className="notebook-band" />
-      </div>
-      <div className="prop prop-pen">
-        <span className="pen-tip" />
-        <span className="pen-cap" />
-      </div>
-      <div className="prop prop-pods">
-        <span className="pods-hinge" />
-        <span className="pods-seam" />
-      </div>
-      <Cup className="prop-mug" />
-    </div>
-  );
-}
-
 /** Cup of coffee seen from above, with two rising wisps. Pure CSS, no asset. */
 export function Cup({ className }: { className?: string }) {
   return (
