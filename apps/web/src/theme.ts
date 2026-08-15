@@ -1,9 +1,8 @@
 /**
- * Theme registry shared by CSS and the Pixi board. CSS reads the palette from
- * `:root[data-theme=...]` blocks in globals.css; the board canvas can't use CSS
- * variables, so each theme also carries its board colors here as 0xRRGGBB ints.
- * The two must stay in sync by hand: each BoardTheme mirrors the same-named
- * CSS block's mat/border tones.
+ * Theme registry: the sole palette home for the Pixi board (0xRRGGBB ints —
+ * the canvas can't use CSS variables). CSS reads its palette from
+ * `:root[data-theme=...]` blocks in globals.css; theme.test.ts pins the
+ * pairing (every theme id here has a CSS block with the full var set).
  *
  * The Pixi app runs with a transparent background — the walnut table behind it
  * is a CSS layer (.table in globals.css), so no canvas color lives here.
@@ -34,6 +33,34 @@ export interface BoardTheme {
   cursorLabelText: number;
 }
 
+/** Walnut tones for the world-space table slab (board/table-surface.ts). */
+export interface WoodPalette {
+  base: number;
+  band: number;
+  /** Canvas fill styles with alpha: the grain swatch is baked on a 2D canvas. */
+  dark: string;
+  light: string;
+  knot: number;
+  knotRing: number;
+  check: number;
+}
+
+/** Colors for the loose table objects (board/table-props.ts). */
+export interface PropPalette {
+  notebook: number;
+  notebookEdge: number;
+  pages: number;
+  band: number;
+  pen: number;
+  penHighlight: number;
+  brass: number;
+  pods: number;
+  podsShade: number;
+  coffee: number;
+  crema: number;
+  porcelain: number;
+}
+
 export interface Theme {
   id: string;
   /** Toggle label, e.g. "Day". */
@@ -41,6 +68,8 @@ export interface Theme {
   /** One glyph for the segmented day/night control. */
   emoji: string;
   board: BoardTheme;
+  wood: WoodPalette;
+  props: PropPalette;
 }
 
 /*
@@ -61,6 +90,29 @@ export const THEMES: readonly Theme[] = [
       frameStroke: 0x5a4426,
       cursorLabelText: 0xfff8ef,
     },
+    wood: {
+      base: 0x5a3821,
+      band: 0x6b4527,
+      dark: "rgba(34,18,7,0.48)",
+      light: "rgba(214,163,106,0.16)",
+      knot: 0x231205,
+      knotRing: 0x4b2d16,
+      check: 0x1a0c03,
+    },
+    props: {
+      notebook: 0x8e4536,
+      notebookEdge: 0x66301f,
+      pages: 0xeaddc7,
+      band: 0x2f190b,
+      pen: 0x1e2836,
+      penHighlight: 0x3a4759,
+      brass: 0xcfa860,
+      pods: 0xf3ede4,
+      podsShade: 0xb8ac9d,
+      coffee: 0x6a4527,
+      crema: 0xd6a870,
+      porcelain: 0xefe3d0,
+    },
   },
   {
     id: "night",
@@ -73,6 +125,29 @@ export const THEMES: readonly Theme[] = [
       stitch: 0x281c0c,
       frameStroke: 0x1e1408,
       cursorLabelText: 0x12202f,
+    },
+    wood: {
+      base: 0x2e1c0d,
+      band: 0x3a2412,
+      dark: "rgba(5,2,0,0.58)",
+      light: "rgba(176,128,78,0.1)",
+      knot: 0x120802,
+      knotRing: 0x2e1c0d,
+      check: 0x080300,
+    },
+    props: {
+      notebook: 0x613329,
+      notebookEdge: 0x452219,
+      pages: 0xb9aa93,
+      band: 0x2f190b,
+      pen: 0x141c27,
+      penHighlight: 0x293543,
+      brass: 0xcfa860,
+      pods: 0xcfc5b7,
+      podsShade: 0x8f8578,
+      coffee: 0x6a4527,
+      crema: 0xd6a870,
+      porcelain: 0xc9b89e,
     },
   },
 ];

@@ -1,48 +1,15 @@
 import { CELL_SIZE, matBounds, type Puzzle } from "@puzzlewithme/geometry";
 import { Container, Graphics, Texture, TilingSprite } from "pixi.js";
-
-interface WoodPalette {
-  base: number;
-  band: number;
-  dark: string;
-  light: string;
-  knot: number;
-  knotRing: number;
-  check: number;
-}
-
-const DAY: WoodPalette = {
-  base: 0x5a3821,
-  band: 0x6b4527,
-  dark: "rgba(34,18,7,0.48)",
-  light: "rgba(214,163,106,0.16)",
-  knot: 0x231205,
-  knotRing: 0x4b2d16,
-  check: 0x1a0c03,
-};
-
-const NIGHT: WoodPalette = {
-  base: 0x2e1c0d,
-  band: 0x3a2412,
-  dark: "rgba(5,2,0,0.58)",
-  light: "rgba(176,128,78,0.1)",
-  knot: 0x120802,
-  knotRing: 0x2e1c0d,
-  check: 0x080300,
-};
-
-export interface WorldTable {
-  container: Container;
-  texture: Texture;
-}
+import type { Theme, WoodPalette } from "../theme";
+import type { WorldLayer } from "./world-layer";
 
 /**
  * A procedural walnut surface in puzzle-space. It is the first child of the
  * camera viewport, so grain, knots, mat, pieces, and loose table objects all
  * share one physical coordinate system as the player pans and zooms.
  */
-export function buildTableSurface(puzzle: Puzzle, night: boolean): WorldTable {
-  const palette = night ? NIGHT : DAY;
+export function buildTableSurface(puzzle: Puzzle, theme: Theme): WorldLayer {
+  const palette = theme.wood;
   const mat = matBounds(puzzle.rows, puzzle.cols);
   const margin = 50 * CELL_SIZE;
   const x = mat.minX - margin;
@@ -65,7 +32,7 @@ export function buildTableSurface(puzzle: Puzzle, night: boolean): WorldTable {
   drawKnot(container, mat.maxX - 0.08 * (mat.maxX - mat.minX), mat.minY - 2.1 * CELL_SIZE, 1.65 * CELL_SIZE, 0.56 * CELL_SIZE, palette);
   drawChecks(container, mat, palette);
 
-  return { container, texture };
+  return { container, textures: [texture] };
 }
 
 function drawBroadBands(

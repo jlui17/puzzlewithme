@@ -1,55 +1,15 @@
 import { CELL_SIZE, matBounds, type Puzzle } from "@puzzlewithme/geometry";
 import { Container, Graphics } from "pixi.js";
-
-interface PropPalette {
-  notebook: number;
-  notebookEdge: number;
-  pages: number;
-  band: number;
-  pen: number;
-  penHighlight: number;
-  brass: number;
-  pods: number;
-  podsShade: number;
-  coffee: number;
-  crema: number;
-  porcelain: number;
-}
-
-const DAY: PropPalette = {
-  notebook: 0x8e4536,
-  notebookEdge: 0x66301f,
-  pages: 0xeaddc7,
-  band: 0x2f190b,
-  pen: 0x1e2836,
-  penHighlight: 0x3a4759,
-  brass: 0xcfa860,
-  pods: 0xf3ede4,
-  podsShade: 0xb8ac9d,
-  coffee: 0x6a4527,
-  crema: 0xd6a870,
-  porcelain: 0xefe3d0,
-};
-
-const NIGHT: PropPalette = {
-  ...DAY,
-  notebook: 0x613329,
-  notebookEdge: 0x452219,
-  pages: 0xb9aa93,
-  pen: 0x141c27,
-  penHighlight: 0x293543,
-  pods: 0xcfc5b7,
-  podsShade: 0x8f8578,
-  porcelain: 0xc9b89e,
-};
+import type { PropPalette, Theme } from "../theme";
+import type { WorldLayer } from "./world-layer";
 
 /**
  * Table objects drawn in puzzle-space. The returned container belongs below
  * the mat in BoardRenderer's camera-transformed viewport, so the props pan and
  * zoom with the cloth and the cloth naturally covers their overlapping edges.
  */
-export function buildTableProps(puzzle: Puzzle, night: boolean): Container {
-  const palette = night ? NIGHT : DAY;
+export function buildTableProps(puzzle: Puzzle, theme: Theme): WorldLayer {
+  const palette = theme.props;
   const bounds = matBounds(puzzle.rows, puzzle.cols);
   const layer = new Container({ label: "table-props" });
 
@@ -58,7 +18,7 @@ export function buildTableProps(puzzle: Puzzle, night: boolean): Container {
   layer.addChild(buildPods(palette, bounds.minX - 1.4 * CELL_SIZE, bounds.minY + 5 * CELL_SIZE));
   layer.addChild(buildMug(palette, bounds.minX - 2.3 * CELL_SIZE, bounds.maxY - 2.5 * CELL_SIZE));
 
-  return layer;
+  return { container: layer, textures: [] };
 }
 
 function buildNotebook(p: PropPalette, x: number, y: number): Container {
