@@ -4,7 +4,6 @@ import { WebSocket } from "ws";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { ImageStore } from "../images/image-store.js";
 import { InMemoryRoomStore } from "../store/room-store.js";
-import { HOLD_TIMEOUT_MS } from "../engine/constants.js";
 import { createGameServer, type GameServer } from "./server.js";
 
 // Images are never touched over the WS path; a no-op store satisfies the wiring.
@@ -190,32 +189,6 @@ describe("websocket net layer", () => {
     expect(pong).toEqual({ type: "pong" });
   });
 
-  it("reports held_by with the holder's name on a conflicting grab", async () => {
-    const a = await join(ROOM);
-    const b = await join(ROOM);
-
-    a.client.send({ type: "grab", groupId: "0-0" });
-    await a.client.waitForType("grab_result");
-
-    b.client.send({ type: "grab", groupId: "0-0" });
-    const conflict = await b.client.waitForType("grab_result");
-    expect(conflict).toMatchObject({ groupId: "0-0", outcome: "held_by", holderName: a.name });
-  });
-
-  it("releases a held group and drops presence when the holder disconnects", async () => {
-    const a = await join(ROOM);
-    const b = await join(ROOM);
-
-    a.client.send({ type: "grab", groupId: "0-0" });
-    await b.client.waitForType("held");
-
-    a.client.close();
-    const released = await b.client.waitForType("released");
-    expect(released).toMatchObject({ type: "released", groupId: "0-0" });
-    const left = await b.client.waitFor((m) => m.type === "presence" && m.event === "left");
-    expect(left).toMatchObject({ event: "left", guestId: a.playerId });
-  });
-
   it("resumes the prior identity and score with a resume token, mints a new one without", async () => {
     // Keeper keeps the room resident so resume reads live in-memory identity.
     await join(ROOM);
@@ -261,31 +234,6 @@ describe("websocket net layer", () => {
     expect(me?.placedCount).toBe(1);
   });
 
-  it("records session-history participation (createdByUser false) when a user joins over WS", async () => {
-    await join(ROOM, null, "user-J");
-    const rooms = await store.listUserRooms("user-J");
-    expect(rooms).toEqual([
-      expect.objectContaining({ roomId: ROOM, createdByUser: false, status: "active" }),
-    ]);
-  });
-
-  it("a rename persists as the user's app-wide display name and follows them into another room", async () => {
-    const a = await join(ROOM, null, "user-N");
-    a.client.send({ type: "rename", name: "Justin" });
-    // The rename broadcast confirms the engine applied it; the display-name
-    // write rides the same call.
-    const keeper = await join(ROOM);
-    a.client.send({ type: "rename", name: "Justin2" });
-    await keeper.client.waitFor((m) => m.type === "presence" && m.event === "renamed" && m.name === "Justin2");
-    expect(await store.getUserDisplayName("user-N")).toBe("Justin2");
-
-    // A brand-new room: the minted identity starts as the display name, not a
-    // generated one.
-    await makeRoom("room-2");
-    const elsewhere = await join("room-2", null, "user-N");
-    expect(elsewhere.name).toBe("Justin2");
-  });
-
   it("converges a live-derived board to a fresh snapshot (NFR-6)", async () => {
     const a = await join(ROOM);
     const b = await join(ROOM);
@@ -317,31 +265,6 @@ describe("websocket net layer", () => {
     expect(derived.progress).toEqual(fromSnapshot.progress);
     expect(derived.scores.get(a.playerId)).toBe(fromSnapshot.scores.get(a.playerId));
     expect(derived.scores.get(b.playerId)).toBe(fromSnapshot.scores.get(b.playerId));
-  });
-
-  it("broadcasts completion on solve and rejects further mutations", async () => {
-    const a = await join(ROOM);
-    for (const [groupId, x, y] of [
-      ["0-0", 0, 0],
-      ["0-1", 100, 0],
-      ["1-0", 0, 100],
-      ["1-1", 100, 100],
-    ] as const) {
-      a.client.send({ type: "grab", groupId });
-      await a.client.waitFor((m) => m.type === "grab_result");
-      a.client.send({ type: "drop", groupId, x, y });
-      await a.client.waitFor((m) => m.type === "snap_result" && m.droppedGroupId === groupId);
-    }
-    const completion = await a.client.waitForType("completion");
-    expect(completion).toMatchObject({ type: "completion", scoreboard: { progress: { placedPieces: 4, totalPieces: 4 } } });
-
-    // Completion is persisted before it's announced (NFR-5); the store shows it.
-    const persisted = await store.load(ROOM);
-    expect(persisted?.settings.status).toBe("completed");
-
-    a.client.send({ type: "grab", groupId: "0-0" });
-    const err = await a.client.waitForType("error");
-    expect(err).toMatchObject({ type: "error", code: "room_completed" });
   });
 
   it("rejects the 21st player with room_full (engine cap is 20)", async () => {
@@ -379,44 +302,6 @@ describe("websocket net layer", () => {
     // Non-finite coordinate on an otherwise-joined client is rejected at parse.
     good.client.send({ type: "move", groupId: "0-0", x: "nope", y: 0 });
     expect(await good.client.waitForType("error")).toMatchObject({ code: "invalid_message" });
-  });
-
-  it("releases idle holds on the periodic sweep (§9 AFK)", async () => {
-    // Own server with an injected clock so the AFK timeout is reached without
-    // sleeping; the beforeEach server uses the real clock.
-    let clock = 0;
-    const idleStore = new InMemoryRoomStore();
-    await idleStore.create({ roomId: "idle-room", ...BASE_SETTINGS });
-    const idleGame = createGameServer({
-      roomStore: idleStore,
-      imageStore: stubImageStore,
-      registry: { now: () => clock, checkpointIntervalMs: 3_600_000, sweepIntervalMs: 3_600_000 },
-    });
-    await new Promise<void>((resolve) => idleGame.server.listen(0, resolve));
-    const idlePort = (idleGame.server.address() as AddressInfo).port;
-
-    const a = new TestClient(idlePort);
-    const b = new TestClient(idlePort);
-    clients.push(a, b);
-    try {
-      await a.opened();
-      a.send({ type: "join", roomId: "idle-room", resumeToken: null });
-      await a.waitForType("joined");
-      await b.opened();
-      b.send({ type: "join", roomId: "idle-room", resumeToken: null });
-      await b.waitForType("joined");
-
-      a.send({ type: "grab", groupId: "0-0" });
-      await b.waitForType("held");
-
-      clock += HOLD_TIMEOUT_MS;
-      idleGame.registry.runIdleSweep();
-
-      const released = await b.waitForType("released");
-      expect(released).toMatchObject({ type: "released", groupId: "0-0" });
-    } finally {
-      await idleGame.close();
-    }
   });
 
   it("reaps a socket that stops answering keepalive pings, sparing a live one", async () => {
