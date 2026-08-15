@@ -2,12 +2,13 @@
  * Intent side + connection lifecycle (deliverables 2 and 4). Owns the socket,
  * the outbound move throttle, the periodic cursor tick, the reconnect backoff,
  * and the optimistic-drag state machine; delegates all board mutation to
- * BoardStore. Sends intents only (§6.2) and reconciles to authoritative
- * results.
+ * BoardStore and all local-vs-authoritative arbitration to reconcile().
+ * Sends intents only (§6.2) and reconciles to authoritative results.
  */
 import type { ClientMessage, ServerMessage } from "@puzzlewithme/shared";
 import { backoffDelay } from "./backoff";
 import { BoardStore } from "./board-store";
+import { reconcile, type DragState, type StoreOp } from "./reconcile";
 import type {
   Clock,
   Scheduler,
@@ -73,13 +74,6 @@ const HEARTBEAT_INTERVAL_MS = 10_000;
  * Guessed from that "tolerate a couple of misses" reasoning, not measured.
  */
 const LIVENESS_TIMEOUT_MS = 25_000;
-
-interface DragState {
-  groupId: string;
-  originalPosition: Vec2;
-  /** pending: grab not yet granted; granted: hold confirmed; dropping: drop sent, awaiting snap_result. */
-  phase: "pending" | "granted" | "dropping";
-}
 
 export interface SyncClientConfig {
   roomId: string;
@@ -309,102 +303,69 @@ export class SyncClient {
     this.debugStats.lastInboundAt = this.lastInboundAt;
     if (msg.type === "snap_result") this.debugStats.lastSnapResultAt = this.lastInboundAt;
 
-    switch (msg.type) {
-      case "joined":
-        this.localGuestId = msg.identity.id;
-        this.store.setLocalIdentity(msg.identity.id);
-        this.config.tokenStorage.save(msg.resumeToken);
-        break;
+    // Transport bookkeeping the plan can't carry, before the store sees the
+    // message: identity and resume token on join; on snapshot, reset the
+    // backoff and the cursor relay (lastSentCursor cleared so the next tick
+    // resends regardless of the pre-disconnect position — a new connection
+    // makes any prior send stale to other clients).
+    if (msg.type === "joined") {
+      this.localGuestId = msg.identity.id;
+      this.config.tokenStorage.save(msg.resumeToken);
+    } else if (msg.type === "snapshot") {
+      this.reconnectAttempt = 0;
+      this.moveThrottle.reset();
+      this.lastSentCursor = null;
+      this.startCursorTick();
+    }
 
-      case "snapshot":
-        // A received snapshot means a full resync succeeded: reset backoff and
-        // fail any in-flight drag gracefully (the snapshot is now the truth).
-        this.reconnectAttempt = 0;
-        this.drag = null;
-        this.moveThrottle.reset();
-        // Force the next tick to resend regardless of the pre-disconnect
-        // position: this is a new connection, so any prior send is stale to
-        // other clients even if our pointer never moved across the gap.
-        this.lastSentCursor = null;
-        this.startCursorTick();
-        this.store.applySnapshot(msg);
-        this.store.setConnection("connected");
-        this.startHeartbeat();
-        break;
+    const plan = reconcile(msg, this.drag, this.localGuestId);
+    this.drag = plan.drag;
+    for (const op of plan.store) this.applyStoreOp(op);
+    for (const event of plan.emit) this.emit(event);
 
-      case "pong":
-        // Liveness reply; lastInboundAt was already refreshed above. No state.
-        break;
+    if (msg.type === "snapshot") {
+      this.startHeartbeat();
+    } else if (msg.type === "room_full") {
+      // No reconnect: capacity won't change by retrying (§9, no queueing).
+      this.closedByUser = true;
+      this.socket?.close();
+    }
+  }
 
-      case "grab_result":
-        if (msg.outcome === "granted") {
-          if (this.drag?.groupId === msg.groupId && this.drag.phase === "pending") {
-            this.drag.phase = "granted";
-          }
-        } else {
-          // held_by: roll back the optimistic hold and surface who holds it
-          // (FR-9). We only get holderName, not a guest id (see report).
-          if (this.drag?.groupId === msg.groupId) {
-            this.store.rollbackGrab(this.drag.groupId, this.drag.originalPosition);
-            this.drag = null;
-          }
-          this.emit({ type: "grab_rejected", groupId: msg.groupId, holderName: msg.holderName });
-        }
+  private applyStoreOp(op: StoreOp): void {
+    switch (op.op) {
+      case "setLocalIdentity":
+        this.store.setLocalIdentity(op.guestId);
         break;
-
-      case "group_moved":
-        // Our own optimistic drag leads locally; ignore the echo for it.
-        if (this.drag?.groupId === msg.groupId) break;
-        this.store.applyGroupMoved(msg);
+      case "setConnection":
+        this.store.setConnection(op.status);
         break;
-
-      case "held":
-        // Room-wide attribution of a grab. Our own grab already led locally
-        // (beginDrag set heldBy optimistically); applying our own echo again
-        // can't change the value, but skip it anyway so it never races a
-        // concurrent local mutation of the same drag.
-        if (this.drag?.groupId === msg.groupId && msg.playerId === this.localGuestId) break;
-        this.store.applyGroupHeld(msg);
+      case "applySnapshot":
+        this.store.applySnapshot(op.msg);
         break;
-
-      case "released":
-        // A release-without-drop for our own active drag would jump the
-        // group to the server's rest position mid-drag; our own drag
-        // lifecycle (endDrag/rollbackGrab/reconnect) already owns that case.
-        if (this.drag?.groupId === msg.groupId) break;
-        this.store.applyGroupReleased(msg);
+      case "rollbackGrab":
+        this.store.rollbackGrab(op.groupId, op.originalPosition);
         break;
-
-      case "snap_result":
-        this.store.applySnapResult(msg);
-        if (this.drag?.groupId === msg.droppedGroupId) this.drag = null;
+      case "applyGroupMoved":
+        this.store.applyGroupMoved(op.msg);
         break;
-
-      case "cursor":
-        this.store.applyCursor(msg);
+      case "applyGroupHeld":
+        this.store.applyGroupHeld(op.msg);
         break;
-
-      case "presence":
-        this.store.applyPresence(msg);
+      case "applyGroupReleased":
+        this.store.applyGroupReleased(op.msg);
         break;
-
-      case "completion":
-        this.store.applyCompletion(msg);
-        this.emit({ type: "completion", totalActiveSolvingTimeMs: msg.totalActiveSolvingTimeMs });
+      case "applySnapResult":
+        this.store.applySnapResult(op.msg);
         break;
-
-      case "room_full":
-        this.store.setConnection("room_full");
-        this.emit({ type: "room_full" });
-        // No reconnect: capacity won't change by retrying (§9, no queueing).
-        this.closedByUser = true;
-        this.socket?.close();
+      case "applyCursor":
+        this.store.applyCursor(op.msg);
         break;
-
-      case "error":
-        // Includes room_completed (FR-25: mutations rejected once a room is
-        // done); the UI reads code off this same channel to flip read-only.
-        this.emit({ type: "error", code: msg.code, message: msg.message });
+      case "applyPresence":
+        this.store.applyPresence(op.msg);
+        break;
+      case "applyCompletion":
+        this.store.applyCompletion(op.msg);
         break;
     }
   }
@@ -447,7 +408,6 @@ export class SyncClient {
     if (!this.drag) return;
     this.store.optimisticMove(this.drag.groupId, x, y);
     if (this.isConnected()) {
-      this.drag.phase = "dropping";
       this.send({ type: "drop", groupId: this.drag.groupId, x, y });
     } else {
       this.store.releaseHold(this.drag.groupId);

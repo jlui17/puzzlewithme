@@ -159,8 +159,8 @@ export class BoardStore {
   /**
    * Room-wide attribution of a granted grab (FR-19). Only touches `heldBy`,
    * never position, so applying our own optimistic hold's echo is inherently
-   * a no-op for local drag state (SyncClient still guards it to skip the
-   * redundant notify while a drag is in flight).
+   * a no-op for local drag state (reconcile() still skips it so it can't race
+   * a concurrent local mutation of the same drag).
    */
   applyGroupHeld(msg: GroupHeldMessage): void {
     const group = this.state.groups.get(msg.groupId);
