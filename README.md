@@ -47,8 +47,4 @@ bun run typecheck
 bun run build
 ```
 
-`bun run test` runs everything except one integration suite gated on real infrastructure: the S3 image-store suite, skipped unless `S3_BUCKET` is set (`S3ImageStore` is unit-tested against a fake client in the default run; the gated suite just confirms the real SDK calls round-trip). The S3 suite can't clean up after itself (its IAM credentials have no delete permission), so it always overwrites one fixed object key rather than minting a new one per run.
-
-**Why the server and sync logic are unit-testable at all:** puzzle geometry is a pure function of a seed (`packages/geometry`), so a test can compute the exact expected piece positions and drive a real grab/move/drop sequence without faking randomness. `apps/server/src/e2e.test.ts` uses this to boot the real HTTP+WS server in-process, create a room through the actual multipart upload endpoint, and play a real solve sequence across two WebSocket clients, asserting both converge on identical results and a late-joining third client's snapshot matches. The web client's sync layer (`apps/web/src/sync`) is DOM-free for the same reason: it takes an injected socket, so `sync-client.test.ts` and `board-store.test.ts` drive it with a fake one.
-
-The rendering/input layer (`apps/web/src/board`, PixiJS canvas and pointer handling) has no equivalent automated coverage; it's tested manually.
+Strategy, layer-by-layer patterns, and where a new test goes: [TESTING.md](./TESTING.md). The short version: logic is tested pure or through injected seams, each component gets one in-process integration suite, `apps/server/src/e2e.test.ts` is the single full-stack smoke, and rendering is checked in a real browser on demand.

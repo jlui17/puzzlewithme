@@ -7,6 +7,8 @@ description: Validate a change end-to-end in a real browser with agent-browser. 
 
 Drives the real app (Next.js web + game server + WebSocket sync + PixiJS board) with the `agent-browser` CLI. Every command below was validated working; deviate only when the UI has changed.
 
+This is the browser tier of the repo's test strategy (TESTING.md): the only coverage for the Pixi scene actually rendering and for real pointer events, run on demand rather than in `bun run test`. Anything expressible as a vitest test at a lower layer belongs there, not here.
+
 ## Hard requirements (read first)
 
 - **Run every `agent-browser` command from the repo root.** `./agent-browser.json` there passes `--use-angle=metal` to Chrome. Without it, headless Chrome falls back to swiftshader WebGL, which deadlocks on the board's `antialias: true` canvas and wedges the whole agent-browser daemon (every later command fails with `Resource temporarily unavailable (os error 35)`).
