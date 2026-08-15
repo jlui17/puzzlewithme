@@ -1,9 +1,9 @@
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import Database from "better-sqlite3";
-import type { RoomSettings } from "@puzzlewithme/shared";
+import type { RoomSettings, UserImageSummary, UserRoomSummary } from "@puzzlewithme/shared";
 import type { RoomDeviations, SerializedRoomState } from "../engine/types.js";
-import { emptyRoomState, type RoomStore, type UserImageSummary, type UserRoomSummary } from "./room-store.js";
+import { emptyRoomState, type RoomStore } from "./room-store.js";
 
 /** SQLite has no unique_violation code; better-sqlite3 throws this message for a PK collision. */
 const CONSTRAINT_ERROR = "SQLITE_CONSTRAINT_PRIMARYKEY";

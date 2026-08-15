@@ -13,6 +13,7 @@ import {
   type BoardState,
   type ConnectionStatus,
 } from "../sync";
+import { getRoom } from "../api";
 import { roomImageUrl, wsUrl } from "../config";
 import { Cup, TableSurface } from "../table";
 import { CompletionOverlay, type Contribution } from "./CompletionOverlay";
@@ -88,26 +89,12 @@ export function RoomClient({ roomId }: { roomId: string }) {
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch(`/api/rooms/${encodeURIComponent(roomId)}`);
-        if (cancelled) return;
-        if (res.status === 404) {
-          setLoad({ phase: "not_found" });
-          return;
-        }
-        if (!res.ok) {
-          setLoad({ phase: "error", message: `Server error (${res.status}).` });
-          return;
-        }
-        const data = (await res.json()) as { exists: boolean; settings: RoomSettings };
-        if (cancelled) return;
-        if (!data.exists) setLoad({ phase: "not_found" });
-        else setLoad({ phase: "ready", settings: data.settings });
-      } catch {
-        if (!cancelled) setLoad({ phase: "error", message: "Could not reach the server." });
-      }
-    })();
+    void getRoom(roomId).then((lookup) => {
+      if (cancelled) return;
+      if (lookup.kind === "not_found") setLoad({ phase: "not_found" });
+      else if (lookup.kind === "error") setLoad({ phase: "error", message: lookup.message });
+      else setLoad({ phase: "ready", settings: lookup.info.settings });
+    });
     return () => {
       cancelled = true;
     };

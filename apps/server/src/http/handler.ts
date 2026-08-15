@@ -1,7 +1,12 @@
 import { randomBytes, randomInt } from "node:crypto";
 import type { IncomingMessage, RequestListener, ServerResponse } from "node:http";
 import { MAX_PIECE_COUNT, MIN_PIECE_COUNT } from "@puzzlewithme/geometry";
-import { MAX_NAME_LENGTH, type RoomSettings } from "@puzzlewithme/shared";
+import {
+  MAX_NAME_LENGTH,
+  MAX_ROOM_NAME_LENGTH,
+  type RoomInfoResponse,
+  type RoomSettings,
+} from "@puzzlewithme/shared";
 import { ensureUserDisplayName } from "../engine/names.js";
 import { MAX_UPLOAD_BYTES } from "../images/constants.js";
 import type { ImageStore } from "../images/image-store.js";
@@ -23,11 +28,6 @@ const MULTIPART_OVERHEAD_BUDGET_BYTES = 64 * 1024;
 // Matches the join schema's MAX_USER_ID_LENGTH: a UUID is 36 chars, 128 caps a
 // malicious oversized field on the create form while leaving room to grow.
 const MAX_USER_ID_LENGTH = 128;
-
-// Caps a user-chosen session name. 80 chars fits any reasonable title on one
-// list row while bounding what a malicious client can store; picked to match
-// the room list UI, not measured.
-const MAX_ROOM_NAME_LENGTH = 80;
 
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
   const payload = JSON.stringify(body);
@@ -451,7 +451,8 @@ async function handleGetRoom(res: ServerResponse, deps: HttpHandlerDeps, roomId:
     sendJson(res, 404, { error: "room_not_found" });
     return;
   }
-  sendJson(res, 200, { exists: true, status: state.settings.status, settings: state.settings });
+  const info: RoomInfoResponse = { exists: true, status: state.settings.status, settings: state.settings };
+  sendJson(res, 200, info);
 }
 
 async function handleGetRoomImage(res: ServerResponse, deps: HttpHandlerDeps, roomId: string): Promise<void> {

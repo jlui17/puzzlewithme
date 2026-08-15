@@ -1,63 +1,42 @@
 "use client";
 
 import { deriveGrid, MAX_PIECE_COUNT, MIN_PIECE_COUNT } from "@puzzlewithme/geometry";
-import { MAX_NAME_LENGTH } from "@puzzlewithme/shared";
+import {
+  MAX_NAME_LENGTH,
+  MAX_ROOM_NAME_LENGTH,
+  type UserImageSummary,
+  type UserRoomSummary,
+} from "@puzzlewithme/shared";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { apiBase, roomImageUrl } from "../src/config";
+import * as api from "../src/api";
+import type { Source } from "../src/api";
+import { roomImageUrl } from "../src/config";
 import { loadOrCreateUserId } from "../src/sync";
 import { Cup, TableSurface } from "../src/table";
 import { ThemeSwitch } from "../src/theme-switcher";
 
 const ACCEPTED = ["image/jpeg", "image/png", "image/webp"];
 
-// Matches the server's MAX_ROOM_NAME_LENGTH (http/handler.ts) so the input
-// can't produce a value the PATCH would reject.
-const MAX_SESSION_NAME_LENGTH = 80;
-
-/**
- * Mirrors the server's UserImageSummary (apps/server/src/store/room-store.ts).
- * width/height are the original upload's dimensions, so running deriveGrid on
- * them previews exactly the grid the server will validate against.
- */
-interface GalleryImage {
-  imageId: string;
-  createdAt: string;
-  width: number;
-  height: number;
-}
-
-/** Mirrors the server's UserRoomSummary (apps/server/src/store/room-store.ts). */
-interface SessionRoom {
-  roomId: string;
-  status: "active" | "completed";
-  createdByUser: boolean;
-  createdAt: string;
-  lastActiveAt: string;
-  placedPieces: number;
-  totalPieces: number;
-  name: string | null;
-}
-
 export default function CreatePage() {
   const router = useRouter();
-  const [file, setFile] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  // What the next puzzle is made from; one value, so upload and gallery picks
+  // can't both be selected.
+  const [source, setSource] = useState<Source | null>(null);
   const [imageDims, setImageDims] = useState<{ width: number; height: number } | null>(null);
   const [target, setTarget] = useState(250);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // The live upload's object URL, for revocation and for ignoring a slow
+  // probe of an image the user already replaced.
   const objectUrlRef = useRef<string | null>(null);
   // The native file input keeps showing its chosen filename even after React
   // state moves to a gallery pick; clearing needs a direct .value reset.
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   // Resolved on the client only (localStorage is unavailable during SSR).
   const [userId, setUserId] = useState<string | null>(null);
-  const [sessions, setSessions] = useState<SessionRoom[]>([]);
-  const [gallery, setGallery] = useState<GalleryImage[]>([]);
-  // A gallery image chosen as the next puzzle's source; mutually exclusive
-  // with `file` (picking either clears the other).
-  const [galleryPick, setGalleryPick] = useState<GalleryImage | null>(null);
+  const [sessions, setSessions] = useState<UserRoomSummary[]>([]);
+  const [gallery, setGallery] = useState<UserImageSummary[]>([]);
 
   useEffect(() => {
     setUserId(loadOrCreateUserId());
@@ -67,37 +46,16 @@ export default function CreatePage() {
   }, []);
 
   // Runs once the client-only userId resolves (null during SSR/first paint).
+  // Session history and the gallery are conveniences; a failure just hides them.
   useEffect(() => {
     if (userId === null) return;
     let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch(`${apiBase}/api/users/${encodeURIComponent(userId)}/rooms`);
-        if (cancelled || !res.ok) return;
-        const data = (await res.json()) as { rooms: SessionRoom[] };
-        if (!cancelled) setSessions(data.rooms);
-      } catch {
-        // Session history is a convenience; a fetch failure just hides the list.
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [userId]);
-
-  useEffect(() => {
-    if (userId === null) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch(`${apiBase}/api/users/${encodeURIComponent(userId)}/images`);
-        if (cancelled || !res.ok) return;
-        const data = (await res.json()) as { images: GalleryImage[] };
-        if (!cancelled) setGallery(data.images);
-      } catch {
-        // The gallery is a convenience; a fetch failure just hides it.
-      }
-    })();
+    void api.listRooms(userId).then((res) => {
+      if (!cancelled && res.ok) setSessions(res.value);
+    });
+    void api.listImages(userId).then((res) => {
+      if (!cancelled && res.ok) setGallery(res.value);
+    });
     return () => {
       cancelled = true;
     };
@@ -110,30 +68,34 @@ export default function CreatePage() {
     [imageDims, target],
   );
 
+  /** Swap the source, releasing whatever the old one held (object URL, input value). */
+  function applySource(next: Source | null): void {
+    if (objectUrlRef.current) {
+      URL.revokeObjectURL(objectUrlRef.current);
+      objectUrlRef.current = null;
+    }
+    // Reset the input so re-picking the same file still fires a change event.
+    if (next?.kind !== "upload" && fileInputRef.current) fileInputRef.current.value = "";
+    if (next?.kind === "upload") objectUrlRef.current = next.url;
+    setSource(next);
+    // A gallery record carries its original-upload dimensions, so the
+    // piece-count preview matches what the server will validate — no probe
+    // needed. An upload's dims arrive from the probe below.
+    setImageDims(next?.kind === "gallery" ? { width: next.image.width, height: next.image.height } : null);
+  }
+
   function onPick(picked: File | null): void {
     // A canceled file dialog reports no file; keep the current selection —
     // with the hidden-input picker there's nothing to "clear" to.
     if (!picked) return;
     setError(null);
-    setGalleryPick(null);
-    if (objectUrlRef.current) {
-      URL.revokeObjectURL(objectUrlRef.current);
-      objectUrlRef.current = null;
-    }
-    setImageDims(null);
     if (!ACCEPTED.includes(picked.type)) {
-      setFile(null);
-      setPreviewUrl(null);
-      // Reset the input so re-picking the same (rejected) file still fires
-      // a change event on the retry.
-      if (fileInputRef.current) fileInputRef.current.value = "";
+      applySource(null);
       setError("Please choose a JPEG, PNG, or WebP image.");
       return;
     }
     const url = URL.createObjectURL(picked);
-    objectUrlRef.current = url;
-    setFile(picked);
-    setPreviewUrl(url);
+    applySource({ kind: "upload", file: picked, url });
     const probe = new Image();
     probe.onload = () => {
       // Ignore a slow decode of an image the user already replaced.
@@ -144,104 +106,45 @@ export default function CreatePage() {
     probe.src = url;
   }
 
-  function onPickFromGallery(img: GalleryImage): void {
+  function onPickFromGallery(img: UserImageSummary): void {
     setError(null);
-    setFile(null);
-    if (fileInputRef.current) fileInputRef.current.value = "";
-    if (objectUrlRef.current) {
-      URL.revokeObjectURL(objectUrlRef.current);
-      objectUrlRef.current = null;
-    }
-    setGalleryPick(img);
-    setPreviewUrl(`${apiBase}/api/images/${encodeURIComponent(img.imageId)}`);
-    // Original-upload dimensions from the gallery record, so the piece-count
-    // preview matches what the server will validate — no probe needed.
-    setImageDims({ width: img.width, height: img.height });
+    applySource({ kind: "gallery", image: img });
   }
 
-  async function onDeleteImage(img: GalleryImage): Promise<void> {
+  async function onDeleteImage(img: UserImageSummary): Promise<void> {
     if (userId === null) return;
     if (!window.confirm("Remove this image from your gallery? Puzzles already made from it keep working.")) return;
-    try {
-      const res = await fetch(
-        `${apiBase}/api/users/${encodeURIComponent(userId)}/images/${encodeURIComponent(img.imageId)}`,
-        { method: "DELETE" },
-      );
-      if (!res.ok) return;
-      setGallery((prev) => prev.filter((g) => g.imageId !== img.imageId));
-      if (galleryPick?.imageId === img.imageId) {
-        setGalleryPick(null);
-        setPreviewUrl(null);
-        setImageDims(null);
-      }
-    } catch {
-      // Leave the gallery as is; the entry reappears correct on next load.
+    const res = await api.deleteImage(userId, img.imageId);
+    // On failure, leave the gallery as is; the entry reappears correct on next load.
+    if (!res.ok) return;
+    setGallery((prev) => prev.filter((g) => g.imageId !== img.imageId));
+    if (source?.kind === "gallery" && source.image.imageId === img.imageId) {
+      applySource(null);
     }
   }
 
   async function onCreate(): Promise<void> {
-    if ((file === null && galleryPick === null) || submitting) return;
+    if (source === null || submitting) return;
+    // The gallery only loads for a resolved userId, so a gallery source
+    // without one can't happen; guard anyway rather than send an unowned reuse.
+    if (source.kind === "gallery" && userId === null) return;
     setSubmitting(true);
     setError(null);
-    try {
-      let res: Response;
-      if (galleryPick !== null && userId !== null) {
-        // Reuse an already-uploaded image: JSON body, no bytes re-sent.
-        res = await fetch(`${apiBase}/api/rooms`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ imageId: galleryPick.imageId, pieces: target, userId }),
-        });
-      } else if (file !== null) {
-        const body = new FormData();
-        body.append("image", file);
-        body.append("pieces", String(target));
-        // Lets the server record this browser as the room's creator (session
-        // history) and the image's uploader (gallery).
-        if (userId !== null) body.append("userId", userId);
-        res = await fetch(`${apiBase}/api/rooms`, { method: "POST", body });
-      } else {
-        setSubmitting(false);
-        return;
-      }
-      if (res.status === 201) {
-        const { roomId } = (await res.json()) as { roomId: string };
-        router.push(`/room/${encodeURIComponent(roomId)}`);
-        return;
-      }
-      // Surface the server's human-readable reason inline (FR-1).
-      let message = `Room creation failed (${res.status}).`;
-      try {
-        const data = (await res.json()) as { error?: string };
-        if (data.error) message = data.error;
-      } catch {
-        // Non-JSON error body; keep the status-based fallback.
-      }
-      setError(message);
-      setSubmitting(false);
-    } catch {
-      setError("Could not reach the server. Is it running?");
-      setSubmitting(false);
+    const res = await api.createRoom(source, target, userId);
+    if (res.ok) {
+      router.push(`/room/${encodeURIComponent(res.value.roomId)}`);
+      return;
     }
+    setError(res.error);
+    setSubmitting(false);
   }
 
   async function onRenameSession(roomId: string, name: string | null): Promise<boolean> {
     if (userId === null) return false;
-    try {
-      const res = await fetch(
-        `${apiBase}/api/users/${encodeURIComponent(userId)}/rooms/${encodeURIComponent(roomId)}`,
-        {
-          method: "PATCH",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ name }),
-        },
-      );
-      if (!res.ok) return false;
-      setSessions((prev) => prev.map((s) => (s.roomId === roomId ? { ...s, name } : s)));
-      return true;
-    } catch {
-      return false;
-    }
+    const res = await api.renameRoom(userId, roomId, name);
+    if (!res.ok) return false;
+    setSessions((prev) => prev.map((s) => (s.roomId === roomId ? { ...s, name } : s)));
+    return true;
   }
 
   const pieces = grid === null ? target : grid.rows * grid.cols;
@@ -290,7 +193,7 @@ export default function CreatePage() {
               <button
                 type="button"
                 className={
-                  file !== null
+                  source?.kind === "upload"
                     ? "picker-tile picker-upload picker-tile--selected"
                     : "picker-tile picker-upload"
                 }
@@ -301,12 +204,12 @@ export default function CreatePage() {
                   onPick(e.dataTransfer.files?.[0] ?? null);
                 }}
               >
-                {file !== null && previewUrl !== null ? (
+                {source?.kind === "upload" ? (
                   // The picked file's own thumbnail: with no separate preview
                   // pane, the selected tile is the only confirmation of what
                   // you're about to brew.
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={previewUrl} alt={`Selected: ${file.name}`} />
+                  <img src={source.url} alt={`Selected: ${source.file.name}`} />
                 ) : (
                   <>
                     <span className="picker-upload-plus" aria-hidden="true">
@@ -317,7 +220,7 @@ export default function CreatePage() {
                 )}
               </button>
               {gallery.map((img) => {
-                const selected = galleryPick?.imageId === img.imageId;
+                const selected = source?.kind === "gallery" && source.image.imageId === img.imageId;
                 return (
                   <div key={img.imageId} className="picker-item">
                     <button
@@ -331,7 +234,7 @@ export default function CreatePage() {
                     >
                       {/* Same-origin API thumbnail; next/image adds no value here. */}
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={`${apiBase}/api/images/${encodeURIComponent(img.imageId)}`} alt="" loading="lazy" />
+                      <img src={api.imageUrl(img.imageId)} alt="" loading="lazy" />
                     </button>
                     <button
                       type="button"
@@ -387,7 +290,7 @@ export default function CreatePage() {
             </div>
           </div>
 
-          <button className="brew-btn" disabled={(!file && !galleryPick) || submitting} onClick={onCreate}>
+          <button className="brew-btn" disabled={source === null || submitting} onClick={onCreate}>
             {submitting ? "Brewing…" : "Brew this puzzle →"}
           </button>
 
@@ -428,7 +331,7 @@ function SessionRow({
   onOpen,
   onRename,
 }: {
-  session: SessionRoom;
+  session: UserRoomSummary;
   onOpen: () => void;
   onRename: (name: string | null) => Promise<boolean>;
 }) {
@@ -443,7 +346,7 @@ function SessionRow({
   ).toLocaleDateString()}`;
 
   async function commit(): Promise<void> {
-    const trimmed = draft.trim().slice(0, MAX_SESSION_NAME_LENGTH);
+    const trimmed = draft.trim().slice(0, MAX_ROOM_NAME_LENGTH);
     const next = trimmed === "" ? null : trimmed;
     if (next === session.name) {
       setEditing(false);
@@ -477,7 +380,7 @@ function SessionRow({
               className="session-name-input"
               autoFocus
               value={draft}
-              maxLength={MAX_SESSION_NAME_LENGTH}
+              maxLength={MAX_ROOM_NAME_LENGTH}
               placeholder={fallbackTitle}
               disabled={saving}
               onClick={(e) => e.stopPropagation()}
@@ -550,18 +453,12 @@ function Identity({ userId }: { userId: string }) {
   useEffect(() => {
     setNameStatus("idle");
     let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch(`${apiBase}/api/users/${encodeURIComponent(userId)}/profile`);
-        if (cancelled || !res.ok) return;
-        const data = (await res.json()) as { displayName: string | null };
-        if (cancelled) return;
-        setSavedName(data.displayName);
-        setNameDraft(data.displayName ?? "");
-      } catch {
-        // Display name is a convenience; a fetch failure just leaves the field blank.
-      }
-    })();
+    // Display name is a convenience; a fetch failure just leaves the field blank.
+    void api.getProfile(userId).then((res) => {
+      if (cancelled || !res.ok) return;
+      setSavedName(res.value.displayName);
+      setNameDraft(res.value.displayName ?? "");
+    });
     return () => {
       cancelled = true;
     };
@@ -574,23 +471,14 @@ function Identity({ userId }: { userId: string }) {
       setNameDraft(savedName ?? "");
       return;
     }
-    try {
-      const res = await fetch(`${apiBase}/api/users/${encodeURIComponent(userId)}/profile`, {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ displayName: trimmed }),
-      });
-      if (!res.ok) {
-        setNameStatus("error");
-        return;
-      }
-      const data = (await res.json()) as { displayName: string };
-      setSavedName(data.displayName);
-      setNameDraft(data.displayName);
-      setNameStatus("saved");
-    } catch {
+    const res = await api.setDisplayName(userId, trimmed);
+    if (!res.ok) {
       setNameStatus("error");
+      return;
     }
+    setSavedName(res.value.displayName);
+    setNameDraft(res.value.displayName);
+    setNameStatus("saved");
   }
 
   return (

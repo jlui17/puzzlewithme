@@ -14,6 +14,9 @@ export type {
 } from "./state.js";
 export { singletonGroupId } from "./state.js";
 
+export type { RoomInfoResponse, UserImageSummary, UserRoomSummary } from "./api-types.js";
+export { MAX_ROOM_NAME_LENGTH } from "./api-types.js";
+
 export type {
   ClientMessage,
   CursorMessage,
