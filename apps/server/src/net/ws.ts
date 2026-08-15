@@ -1,7 +1,7 @@
 import type { Server as HttpServer } from "node:http";
 import { parseClientMessage, type ErrorCode } from "@puzzlewithme/shared";
 import { type RawData, WebSocket, WebSocketServer } from "ws";
-import type { RoomConnection, RoomRegistry } from "./registry.js";
+import type { RoomConnection, RoomRegistry, RoomSession } from "./registry.js";
 
 /** Upgrade path the client is pinned to; the `join` intent carries the roomId, so the path itself is fixed. */
 export const WS_PATH = "/ws";
@@ -115,9 +115,9 @@ export function attachWebSocketServer(
       },
     };
 
-    let state: "awaiting_join" | "joined" = "awaiting_join";
-    let roomId: string | null = null;
-    let playerId: string | null = null;
+    // Null until the join handshake completes; holding the session IS the
+    // "joined" state, so no branch below needs a non-null assertion.
+    let session: RoomSession | null = null;
     let invalidCount = 0;
 
     const reject = (code: ErrorCode, message: string): void => {
@@ -150,7 +150,7 @@ export function attachWebSocketServer(
         return;
       }
 
-      if (state === "awaiting_join") {
+      if (session === null) {
         if (message.type !== "join") {
           reject("invalid_message", "first message must be a join");
           return;
@@ -162,34 +162,18 @@ export function attachWebSocketServer(
           ws.close(1000, outcome.reason);
           return;
         }
-        state = "joined";
-        roomId = message.roomId;
-        playerId = outcome.playerId;
-        console.log(`[ws ${connId}] joined room=${roomId} player=${playerId} userId=${message.userId ?? "-"}`);
+        session = outcome.session;
+        console.log(
+          `[ws ${connId}] joined room=${session.roomId} player=${session.playerId} userId=${message.userId ?? "-"}`,
+        );
         return;
       }
 
-      // Joined: roomId and playerId are set for every branch below.
-      switch (message.type) {
-        case "join":
-          reject("invalid_message", "already joined");
-          return;
-        case "grab":
-          registry.grab(conn, roomId!, playerId!, message.groupId);
-          return;
-        case "move":
-          registry.move(conn, roomId!, playerId!, message.groupId, message.x, message.y);
-          return;
-        case "drop":
-          await registry.drop(conn, roomId!, playerId!, message.groupId, message.x, message.y);
-          return;
-        case "cursor":
-          registry.cursor(conn, roomId!, playerId!, message.x, message.y);
-          return;
-        case "rename":
-          registry.rename(conn, roomId!, playerId!, message.name);
-          return;
+      if (message.type === "join") {
+        reject("invalid_message", "already joined");
+        return;
       }
+      await session.apply(message);
     }
 
     // Serialize handling per connection: join is async, and any intent that
@@ -204,9 +188,11 @@ export function attachWebSocketServer(
     });
 
     ws.on("close", (code: number) => {
-      if (state === "joined" && roomId !== null && playerId !== null) {
-        console.log(`[ws ${connId}] closed code=${code} room=${roomId} player=${playerId} droppedSends=${droppedSends}`);
-        registry.leave(conn, roomId, playerId);
+      if (session !== null) {
+        console.log(
+          `[ws ${connId}] closed code=${code} room=${session.roomId} player=${session.playerId} droppedSends=${droppedSends}`,
+        );
+        session.leave();
       }
     });
 

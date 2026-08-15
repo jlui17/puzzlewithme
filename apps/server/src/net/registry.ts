@@ -1,4 +1,4 @@
-import type { ErrorCode, ServerMessage } from "@puzzlewithme/shared";
+import type { ClientMessage, ErrorCode, ServerMessage } from "@puzzlewithme/shared";
 import { ensureUserDisplayName } from "../engine/names.js";
 import { RoomEngine } from "../engine/room.js";
 import type { MutationRejectionReason } from "../engine/types.js";
@@ -13,9 +13,39 @@ export interface RoomConnection {
   send(message: ServerMessage): void;
 }
 
+/**
+ * A joined player's handle on their room: the proof of a completed join, so
+ * holders never juggle nullable roomId/playerId. Everything after the join
+ * handshake flows through `apply`; `leave` releases the connection.
+ */
+export interface RoomSession {
+  readonly roomId: string;
+  readonly playerId: string;
+  apply(message: ClientMessage): Promise<void>;
+  leave(): void;
+}
+
 export type JoinOutcome =
-  | { ok: true; playerId: string }
+  | { ok: true; session: RoomSession }
   | { ok: false; reason: "room_full" | "room_not_found" };
+
+/**
+ * What one intent does to the room, declaratively: who gets which messages,
+ * and how the mutation persists. runEffect is the single executor, so the
+ * fan-out policy of every intent reads (and changes) in one place.
+ */
+interface Effect {
+  sends: Array<{ to: "sender" | "all" | "others"; message: ServerMessage }>;
+  persist: "none" | "debounced" | "immediate";
+  /**
+   * Broadcast only after an immediate persist completes. Completion's slot
+   * (§7.6): a completed room is permanently read-only (FR-25), so losing it
+   * to a crash after players saw the completion would violate NFR-5.
+   */
+  afterPersist?: ServerMessage;
+}
+
+const NO_EFFECT: Effect = { sends: [], persist: "none" };
 
 interface LiveRoom {
   roomId: string;
@@ -137,109 +167,153 @@ export class RoomRegistry {
         conn,
       );
     }
-    return { ok: true, playerId };
+    return {
+      ok: true,
+      session: {
+        roomId,
+        playerId,
+        apply: (message) => this.apply(conn, roomId, playerId, message),
+        leave: () => this.leave(conn, roomId, playerId),
+      },
+    };
   }
 
-  /** grab intent: granted -> `held` to all + `grab_result granted` to requester; held_by -> `grab_result held_by`; rule rejection -> `error`. */
-  grab(conn: RoomConnection, roomId: string, playerId: string, groupId: string): void {
-    const room = this.rooms.get(roomId);
-    if (room === undefined) return;
-    const result = room.engine.grab(playerId, groupId);
-    if (result.outcome === "granted") {
-      this.broadcast(room, { type: "held", groupId, playerId });
-      conn.send({ type: "grab_result", groupId, outcome: "granted" });
-    } else if (result.outcome === "held_by") {
-      conn.send({ type: "grab_result", groupId, outcome: "held_by", holderName: result.holderName });
-    } else {
-      conn.send(errorFor(mutationReasonToCode(result.reason)));
-    }
-  }
-
-  /**
-   * move intent (§6.2's relaxed path): relay `group_moved` to everyone but the
-   * mover. A rejected move (non-holder, locked, completed) is dropped silently,
-   * not errored: the input parsed fine and is a rule rejection the engine
-   * already blocks by not relaying, so the group simply doesn't move for others.
-   */
-  move(
+  /** One joined intent: resolve the room once, decide the effect, execute it. */
+  private async apply(
     conn: RoomConnection,
     roomId: string,
     playerId: string,
-    groupId: string,
-    x: number,
-    y: number,
-  ): void {
-    const room = this.rooms.get(roomId);
-    if (room === undefined) return;
-    const result = room.engine.move(playerId, groupId, x, y);
-    if (!result.ok) return;
-    this.broadcast(room, { type: "group_moved", groupId, x, y }, conn);
-    this.markDirty(room);
-  }
-
-  /**
-   * drop intent (§7.3 step 4): broadcast the authoritative `snap_result` to all.
-   * On completion, persist before announcing it (§7.6): a completed room is
-   * permanently read-only (FR-25), so losing it to a crash after players saw the
-   * completion would violate NFR-5. Non-completing drops ride the debounce.
-   */
-  async drop(
-    conn: RoomConnection,
-    roomId: string,
-    playerId: string,
-    groupId: string,
-    x: number,
-    y: number,
+    message: ClientMessage,
   ): Promise<void> {
+    // join and ping never reach a session: the WebSocket layer owns the join
+    // handshake and liveness.
+    if (message.type === "join" || message.type === "ping") return;
     const room = this.rooms.get(roomId);
     if (room === undefined) return;
-    const result = room.engine.drop(playerId, groupId, x, y);
-    if (!result.ok) {
-      conn.send(errorFor(mutationReasonToCode(result.reason)));
-      return;
+    const effect = this.effectFor(room, playerId, message);
+    await this.runEffect(room, conn, effect);
+  }
+
+  private effectFor(
+    room: LiveRoom,
+    playerId: string,
+    message: Exclude<ClientMessage, { type: "join" } | { type: "ping" }>,
+  ): Effect {
+    switch (message.type) {
+      /** grab: granted -> `held` to all + `grab_result granted` to requester; held_by -> `grab_result held_by`; rule rejection -> `error`. */
+      case "grab": {
+        const result = room.engine.grab(playerId, message.groupId);
+        if (result.outcome === "granted") {
+          return {
+            sends: [
+              { to: "all", message: { type: "held", groupId: message.groupId, playerId } },
+              { to: "sender", message: { type: "grab_result", groupId: message.groupId, outcome: "granted" } },
+            ],
+            persist: "none",
+          };
+        }
+        if (result.outcome === "held_by") {
+          return {
+            sends: [
+              {
+                to: "sender",
+                message: {
+                  type: "grab_result",
+                  groupId: message.groupId,
+                  outcome: "held_by",
+                  holderName: result.holderName,
+                },
+              },
+            ],
+            persist: "none",
+          };
+        }
+        return rejection(result.reason);
+      }
+
+      // move (§6.2's relaxed path): relay `group_moved` to everyone but the
+      // mover. A rejected move (non-holder, locked, completed) is dropped
+      // silently, not errored: the input parsed fine and is a rule rejection
+      // the engine already blocks by not relaying, so the group simply
+      // doesn't move for others.
+      case "move": {
+        const result = room.engine.move(playerId, message.groupId, message.x, message.y);
+        if (!result.ok) return NO_EFFECT;
+        return {
+          sends: [
+            { to: "others", message: { type: "group_moved", groupId: message.groupId, x: message.x, y: message.y } },
+          ],
+          persist: "debounced",
+        };
+      }
+
+      // drop (§7.3 step 4): broadcast the authoritative `snap_result` to all.
+      // A completing drop persists immediately and announces completion only
+      // after the save (see Effect.afterPersist); others ride the debounce.
+      case "drop": {
+        const result = room.engine.drop(playerId, message.groupId, message.x, message.y);
+        if (!result.ok) return rejection(result.reason);
+        // Desync diagnostics: one line per placement naming every connection
+        // the snap_result went to, so a report of "player X never saw player
+        // Y's pieces" can be checked against what the server actually fanned out.
+        console.log(
+          `[room ${room.roomId}] snap_result group=${result.result.group.id} by=${playerId} recipients=${room.connections.size}`,
+        );
+        if (result.completion !== null) {
+          return {
+            sends: [{ to: "all", message: result.result }],
+            persist: "immediate",
+            afterPersist: result.completion,
+          };
+        }
+        return { sends: [{ to: "all", message: result.result }], persist: "debounced" };
+      }
+
+      // cursor: relay to others (FR-17). Ephemeral, never persisted (§6.2).
+      case "cursor":
+        return {
+          sends: [{ to: "others", message: { type: "cursor", guestId: playerId, x: message.x, y: message.y } }],
+          persist: "none",
+        };
+
+      // rename: broadcast `presence renamed`; a completed room rejects it.
+      case "rename": {
+        const result = room.engine.rename(playerId, message.name);
+        if (!result.ok) return rejection(result.reason);
+        // A rename is also the user's app-wide display name (one name per
+        // person across rooms; future joins anywhere start with it).
+        // Best-effort, like every session-history write: a store failure
+        // must not break the rename.
+        if (result.userId !== undefined) {
+          void this.store.setUserDisplayName(result.userId, result.name).catch((err: unknown) => {
+            console.error(`persisting display name failed for user ${result.userId}`, err);
+          });
+        }
+        return {
+          sends: [
+            {
+              to: "others",
+              message: { type: "presence", event: "renamed", guestId: playerId, name: result.name },
+            },
+          ],
+          persist: "debounced",
+        };
+      }
     }
-    // Desync diagnostics: one line per placement naming every connection the
-    // snap_result went to, so a report of "player X never saw player Y's
-    // pieces" can be checked against what the server actually fanned out.
-    console.log(
-      `[room ${roomId}] snap_result group=${result.result.group.id} by=${playerId} recipients=${room.connections.size}`,
-    );
-    this.broadcast(room, result.result);
-    if (result.completion !== null) {
+  }
+
+  private async runEffect(room: LiveRoom, conn: RoomConnection, effect: Effect): Promise<void> {
+    for (const send of effect.sends) {
+      if (send.to === "sender") conn.send(send.message);
+      else this.broadcast(room, send.message, send.to === "others" ? conn : undefined);
+    }
+    if (effect.persist === "debounced") {
+      this.markDirty(room);
+    } else if (effect.persist === "immediate") {
       this.clearCheckpoint(room);
       await this.saveRoom(room);
-      this.broadcast(room, result.completion);
-    } else {
-      this.markDirty(room);
     }
-  }
-
-  /** cursor intent: relay to others (FR-17). Ephemeral, never persisted (§6.2). */
-  cursor(conn: RoomConnection, roomId: string, playerId: string, x: number, y: number): void {
-    const room = this.rooms.get(roomId);
-    if (room === undefined) return;
-    this.broadcast(room, { type: "cursor", guestId: playerId, x, y }, conn);
-  }
-
-  /** rename intent: broadcast `presence renamed`; a completed room rejects it. */
-  rename(conn: RoomConnection, roomId: string, playerId: string, name: string): void {
-    const room = this.rooms.get(roomId);
-    if (room === undefined) return;
-    const result = room.engine.rename(playerId, name);
-    if (!result.ok) {
-      conn.send(errorFor(mutationReasonToCode(result.reason)));
-      return;
-    }
-    // A rename is also the user's app-wide display name (one name per person
-    // across rooms; future joins anywhere start with it). Best-effort, like
-    // every session-history write: a store failure must not break the rename.
-    if (result.userId !== undefined) {
-      void this.store.setUserDisplayName(result.userId, result.name).catch((err: unknown) => {
-        console.error(`persisting display name failed for user ${result.userId}`, err);
-      });
-    }
-    this.broadcast(room, { type: "presence", event: "renamed", guestId: playerId, name: result.name }, conn);
-    this.markDirty(room);
+    if (effect.afterPersist !== undefined) this.broadcast(room, effect.afterPersist);
   }
 
   /**
@@ -248,7 +322,7 @@ export class RoomRegistry {
    * broadcast `released` for freed holds (FR-14) and `presence left` (FR-18).
    * Evicts + flushes the room once its last connection is gone (§7.5).
    */
-  leave(conn: RoomConnection, roomId: string, playerId: string): void {
+  private leave(conn: RoomConnection, roomId: string, playerId: string): void {
     const room = this.rooms.get(roomId);
     if (room === undefined) return;
     room.connections.delete(conn);
@@ -391,6 +465,14 @@ export class RoomRegistry {
 
 function errorFor(code: ErrorCode): ServerMessage {
   return { type: "error", code, message: code };
+}
+
+/** A rule rejection: the sender alone hears about it, nothing persists. */
+function rejection(reason: MutationRejectionReason): Effect {
+  return {
+    sends: [{ to: "sender", message: errorFor(mutationReasonToCode(reason)) }],
+    persist: "none",
+  };
 }
 
 /** Engine rejection reasons -> wire ErrorCodes. unknown_group/unknown_player mean the client sent a stale/bogus id, i.e. malformed intent. */
