@@ -12,7 +12,9 @@ services:
       args:
         # Public origin, inlined into the client bundle as the wss:// host.
         NEXT_PUBLIC_SERVER_URL: https://${PUZZLE_HOSTNAME:?set PUZZLE_HOSTNAME in .env, e.g. puzzle.example.com}
-        # Rewrite target for /api/rooms*: the game server's compose-network
+        # Enable after the R2 Worker route is deployed.
+        NEXT_PUBLIC_IMAGE_DELIVERY: ${NEXT_PUBLIC_IMAGE_DELIVERY:-}
+        # Rewrite target for /api/*: the game server's compose-network
         # address, bypassing Cloudflare so the server-side proxy fetch isn't
         # blocked by Access (it carries no Access cookie).
         SERVER_INTERNAL_URL: http://server:3001
@@ -31,6 +33,7 @@ services:
       IMAGE_UPLOADS_DIR: ./data/uploaded-images
       # Optional S3 image store; leave unset in .env to store images on the
       # volume instead (main.ts falls back to local disk).
+      S3_ENDPOINT: ${S3_ENDPOINT:-}
       S3_BUCKET: ${S3_BUCKET:-}
       AWS_REGION: ${AWS_REGION:-}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}

@@ -1,0 +1,9 @@
+{
+  "name": "puzzlewithme-photos",
+  "main": "index.js",
+  "compatibility_date": "2026-09-20",
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [{ "pattern": "puzzle.justinlui.dev/photos/*", "zone_name": "justinlui.dev" }],
+  "r2_buckets": [{ "binding": "PHOTOS", "bucket_name": "puzzlewithme-photos" }]
+}

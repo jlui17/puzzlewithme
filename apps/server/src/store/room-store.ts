@@ -138,6 +138,7 @@ export class InMemoryRoomStore implements RoomStore {
       if (state === undefined || ts === undefined) continue;
       summaries.push({
         roomId,
+        imageRef: state.settings.imageRef,
         status: state.settings.status,
         createdByUser: membership.createdByUser,
         createdAt: ts.createdAt,

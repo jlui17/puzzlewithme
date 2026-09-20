@@ -11,7 +11,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import * as api from "../src/api";
 import type { Source } from "../src/api";
-import { roomImageUrl } from "../src/config";
+import { imageUrl, roomImageUrl } from "../src/config";
 import { loadOrCreateUserId } from "../src/sync";
 import { Cup, TableSurface } from "../src/table";
 import { ThemeSwitch } from "../src/theme-switcher";
@@ -372,7 +372,7 @@ function SessionRow({
         <div className="session-thumb">
           {/* Same-origin room image; next/image adds no value for an API route. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={roomImageUrl(session.roomId)} alt="" loading="lazy" />
+          <img src={session.imageRef ? imageUrl(session.imageRef) : roomImageUrl(session.roomId)} alt="" loading="lazy" />
         </div>
         <div className="session-main">
           {editing ? (

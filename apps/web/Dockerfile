@@ -16,10 +16,12 @@ RUN bun install --frozen-lockfile
 COPY packages ./packages
 COPY apps/web ./apps/web
 
-# Next bakes both values into the production output during build.
+# Next bakes these values into the production output during build.
 ARG NEXT_PUBLIC_SERVER_URL
+ARG NEXT_PUBLIC_IMAGE_DELIVERY
 ARG SERVER_INTERNAL_URL
-ENV NEXT_PUBLIC_SERVER_URL=$NEXT_PUBLIC_SERVER_URL \
+ENV NEXT_PUBLIC_IMAGE_DELIVERY=$NEXT_PUBLIC_IMAGE_DELIVERY \
+    NEXT_PUBLIC_SERVER_URL=$NEXT_PUBLIC_SERVER_URL \
     SERVER_INTERNAL_URL=$SERVER_INTERNAL_URL
 
 WORKDIR /app/apps/web

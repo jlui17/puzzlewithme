@@ -1,0 +1,6 @@
+{
+  "name": "puzzlewithme-photos",
+  "private": true,
+  "type": "module",
+  "devDependencies": { "wrangler": "4.135.0" }
+}

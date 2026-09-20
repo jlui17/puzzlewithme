@@ -42,7 +42,11 @@ function buildImageStore(): ImageStore {
     // AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY) via the SDK's default
     // provider chain, same as any other AWS SDK client — no explicit wiring
     // needed here beyond dotenv/config having populated process.env above.
-    const client = new S3Client({});
+    const client = new S3Client({
+      ...(process.env["S3_ENDPOINT"]
+        ? { endpoint: process.env["S3_ENDPOINT"], region: process.env["AWS_REGION"] || "auto" }
+        : {}),
+    });
     return new S3ImageStore({ client, bucket });
   }
   console.log("image store: local disk (S3_BUCKET not set)");

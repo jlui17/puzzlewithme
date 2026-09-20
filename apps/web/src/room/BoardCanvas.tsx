@@ -9,7 +9,7 @@ import { buildAtlases } from "../board/atlas";
 import { buildPiecePolygons } from "../board/hit-test";
 import { InputController } from "../board/input";
 import { BoardRenderer } from "../board/renderer";
-import { roomImageUrl } from "../config";
+import { imageUrl } from "../config";
 import { subscribeTheme } from "../theme";
 
 /**
@@ -50,7 +50,7 @@ export function BoardCanvas({
 
     (async () => {
       try {
-        const res = await fetch(roomImageUrl(settings.roomId));
+        const res = await fetch(imageUrl(settings.imageRef));
         if (!res.ok) throw new Error(`image fetch failed (${res.status})`);
         const bitmap = await createImageBitmap(await res.blob());
         if (disposed) {

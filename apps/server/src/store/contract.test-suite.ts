@@ -105,6 +105,7 @@ export function runRoomStoreContractTests(storeName: string, getStore: () => Roo
 
       const c = byId.get(created.roomId);
       expect(c).toMatchObject({ createdByUser: true, status: "active", placedPieces: 0, totalPieces: 12 });
+      expect(c?.imageRef).toBe(created.imageRef);
       expect(typeof c?.createdAt).toBe("string");
       expect(typeof c?.lastActiveAt).toBe("string");
 

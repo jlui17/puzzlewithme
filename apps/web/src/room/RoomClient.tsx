@@ -14,7 +14,7 @@ import {
   type ConnectionStatus,
 } from "../sync";
 import { getRoom } from "../api";
-import { roomImageUrl, wsUrl } from "../config";
+import { imageUrl, wsUrl } from "../config";
 import { Cup, TableSurface } from "../table";
 import { CompletionOverlay, type Contribution } from "./CompletionOverlay";
 import { BrewSlip, PlayersPanel, type PlayerView } from "./PlayersPanel";
@@ -277,7 +277,7 @@ function RoomLive({ settings }: { settings: RoomSettings }) {
       )}
 
       <RoomMenu
-        imageUrl={roomImageUrl(settings.roomId)}
+        imageUrl={imageUrl(settings.imageRef)}
         playersCollapsed={playersCollapsed}
         onTogglePlayers={togglePlayersCollapsed}
         completed={completed}
@@ -292,7 +292,7 @@ function RoomLive({ settings }: { settings: RoomSettings }) {
 
       {completed && !statsDismissed && (
         <CompletionOverlay
-          imageUrl={roomImageUrl(settings.roomId)}
+          imageUrl={imageUrl(settings.imageRef)}
           elapsedMs={panel.hasCompletionTime ? panel.completionMs : null}
           total={panel.total || totalPieces}
           contributions={panel.contributions}

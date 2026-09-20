@@ -18,10 +18,7 @@ export type Source =
   | { kind: "upload"; file: File; url: string }
   | { kind: "gallery"; image: UserImageSummary };
 
-/** Same-origin URL of a stored image, for gallery thumbnails and previews. */
-export function imageUrl(imageId: string): string {
-  return `${apiBase}/api/images/${encodeURIComponent(imageId)}`;
-}
+export { imageUrl } from "./config";
 
 async function getJson<T>(path: string): Promise<ApiResult<T>> {
   try {

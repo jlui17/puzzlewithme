@@ -18,6 +18,8 @@ export const MAX_ROOM_NAME_LENGTH = 80;
  * progress is derived, not raw JSON. Sorted newest-active first by the store.
  */
 export interface UserRoomSummary {
+  /** Image key for direct delivery; optional for older servers. */
+  imageRef?: string;
   roomId: string;
   status: RoomStatus;
   /** True when this user created the room (sticky once set). */

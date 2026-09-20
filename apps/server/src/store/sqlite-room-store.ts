@@ -179,6 +179,7 @@ export class SqliteRoomStore implements RoomStore {
       const state = JSON.parse(row.state) as RoomDeviations;
       return {
         roomId: settings.roomId,
+        imageRef: settings.imageRef,
         status: settings.status,
         createdByUser: row.created_by_user === 1,
         createdAt: row.created_at,

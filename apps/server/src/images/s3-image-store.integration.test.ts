@@ -18,7 +18,11 @@ const PROBE_KEY = "integration-test/probe";
 describe.skipIf(!process.env["S3_BUCKET"])("S3ImageStore (integration)", () => {
   it("round-trips bytes and content type against real S3", async () => {
     const store = new S3ImageStore({
-      client: new S3Client({}),
+      client: new S3Client({
+        ...(process.env["S3_ENDPOINT"]
+        ? { endpoint: process.env["S3_ENDPOINT"], region: process.env["AWS_REGION"] || "auto" }
+        : {}),
+      }),
       bucket: process.env["S3_BUCKET"]!,
     });
     const bytes = Buffer.from(`probe-${Date.now()}`, "utf8");
@@ -30,7 +34,11 @@ describe.skipIf(!process.env["S3_BUCKET"])("S3ImageStore (integration)", () => {
 
   it("returns null for a key that was never written", async () => {
     const store = new S3ImageStore({
-      client: new S3Client({}),
+      client: new S3Client({
+        ...(process.env["S3_ENDPOINT"]
+        ? { endpoint: process.env["S3_ENDPOINT"], region: process.env["AWS_REGION"] || "auto" }
+        : {}),
+      }),
       bucket: process.env["S3_BUCKET"]!,
     });
     expect(await store.get("integration-test/definitely-does-not-exist")).toBeNull();

@@ -126,3 +126,42 @@ login, and the app after the emailed code.
 - **`NEXT_PUBLIC_SERVER_URL` is baked into the web image at build time**
   (Next inlines it into the client bundle), so changing `PUZZLE_HOSTNAME`
   requires `docker compose up -d --build`, not just a restart.
+
+## R2 photo cutover
+
+This is a separate production operation, not part of building the app.
+
+1. Create a private R2 bucket named `puzzlewithme-photos` and bucket-scoped
+   read/write API credentials for the game server. Do not enable a public bucket URL.
+2. Copy existing S3 objects to R2, preserving every key, byte and content type.
+   Use Cloudflare Super Slurper or an S3-compatible transfer tool. Do not delete
+   the source. Pause new uploads for the final copy and verification so no room
+   can reference an object left behind in S3. Compare object counts and verify
+   bytes for the room and gallery images before switching. No database edits.
+3. Review `worker/wrangler.jsonc`: the route must use the game's existing hostname
+   and the binding must name the destination bucket. Keep `workers_dev` and
+   `preview_urls` disabled. Keep the hostname's Cloudflare Access policy covering
+   `/photos/*`; Access is evaluated before the Worker.
+4. From `worker`, run `bunx wrangler deploy`. Check an existing photo through an
+   authenticated browser and confirm an unauthenticated request is denied by Access.
+5. Set the Compose `.env`: `S3_BUCKET=puzzlewithme-photos`,
+   `S3_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com`, `AWS_REGION=auto`,
+   and the R2 credentials in `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`.
+   Set `NEXT_PUBLIC_IMAGE_DELIVERY=worker` and rebuild/redeploy the app.
+6. Verify a new upload, an old room, gallery selection, puzzle textures and the
+   full-image preview. Browser requests should use `/photos/<key>`, not the image API.
+   Resume uploads after verification.
+
+The Worker uses private, year-long immutable browser caching, not shared edge
+caching. It handles GET, HEAD and ETag revalidation. Object IDs never change content.
+
+To roll back delivery, clear `NEXT_PUBLIC_IMAGE_DELIVERY` and rebuild the web app.
+Keep the server pointed at R2: the existing image API can read it, including new
+uploads. Switching storage back to S3 requires copying post-cutover objects back
+first; otherwise newer rooms would lose their photos.
+
+For a local-disk source, copy the files in `uploaded-images` to R2 under the
+same names. Each `.meta.json` sidecar provides the object's `contentType`; do
+not upload the sidecars as photos. Stop the server for the final copy, retain
+a database/volume backup, and verify every room's `imageRef` exists in R2
+before starting the R2-configured server. Keep the original files for rollback.

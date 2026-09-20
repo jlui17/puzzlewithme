@@ -48,3 +48,19 @@ bun run build
 ```
 
 Strategy, layer-by-layer patterns, and where a new test goes: [TESTING.md](./TESTING.md). The short version: logic is tested pure or through injected seams, each component gets one in-process integration suite, `apps/server/src/e2e.test.ts` is the single full-stack smoke, and rendering is checked in a real browser on demand.
+
+## R2 image delivery
+
+The server still validates and re-encodes uploads. `S3ImageStore` also supports
+R2 through its S3-compatible endpoint: set `S3_ENDPOINT` to
+`https://<account-id>.r2.cloudflarestorage.com`, `S3_BUCKET` to the R2 bucket,
+`AWS_REGION=auto`, and the AWS credential variables to R2 API credentials.
+Leaving the endpoint unset retains AWS S3; leaving the bucket unset retains local disk.
+
+Build the web app with `NEXT_PUBLIC_IMAGE_DELIVERY=worker` to fetch images from
+`/photos/<imageRef>`. The same-origin Worker streams R2 bytes without the VPS.
+Room metadata already carries `imageRef`, so no database schema change is needed.
+Without the flag, the browser uses `/api/images/<imageRef>` as before for galleries
+and now also for the board. The old room-image API remains available.
+
+See [DEPLOY.md](./DEPLOY.md#r2-photo-cutover) for migration and activation order.
