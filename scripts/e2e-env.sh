@@ -45,7 +45,7 @@ start() {
   # rooms and images an earlier run set up; `start --fresh` is the clean slate.
   # S3_BUCKET="" beats apps/server/.env pointing at real S3: dotenv never
   # overrides an existing env var, and main.ts treats empty as unset.
-  PORT=$SERVER_PORT SQLITE_PATH="$DATA_DIR/puzzlewithme.db" S3_BUCKET="" IMAGE_UPLOADS_DIR="$DATA_DIR/uploads" \
+  AUTH_MODE=development DEV_USER_EMAIL=preview@example.test PORT=$SERVER_PORT SQLITE_PATH="$DATA_DIR/puzzlewithme.db" S3_BUCKET="" IMAGE_UPLOADS_DIR="$DATA_DIR/uploads" \
     bun run --filter @puzzlewithme/server dev >"$STATE_DIR/server.log" 2>&1 &
   echo $! > "$STATE_DIR/server.pid"
 
@@ -55,7 +55,7 @@ start() {
   # apps/web/next.config.ts): sharing it hands dev's browsers a bundle wired to
   # this stack's server, where none of dev's rooms exist.
   PORT=$WEB_PORT NEXT_PUBLIC_SERVER_URL="http://localhost:$SERVER_PORT" NEXT_DIST_DIR=".next-e2e" \
-    bun run --filter @puzzlewithme/web dev >"$STATE_DIR/web.log" 2>&1 &
+    bun run --filter @puzzlewithme/web dev --hostname 127.0.0.1 >"$STATE_DIR/web.log" 2>&1 &
   echo $! > "$STATE_DIR/web.pid"
 
   # Server boot is tsx + sqlite (fast); Next dev compiles on demand, so its

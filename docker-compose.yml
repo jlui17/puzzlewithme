@@ -28,6 +28,9 @@ services:
       dockerfile: apps/server/Dockerfile
     restart: unless-stopped
     environment:
+      AUTH_MODE: cloudflare
+      CF_ACCESS_ISSUER: ${CF_ACCESS_ISSUER:?set the Cloudflare Access team URL}
+      CF_ACCESS_AUD: ${CF_ACCESS_AUD:?set the Access application audience}
       # Under data/ (instead of the ./uploaded-images default) so the single
       # volume below covers both SQLite and images.
       IMAGE_UPLOADS_DIR: ./data/uploaded-images

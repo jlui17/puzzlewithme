@@ -1,3 +1,4 @@
+import { rejectAuthentication, type Authenticator, type Principal } from "../auth/identity.js";
 import type { Server as HttpServer } from "node:http";
 import { parseClientMessage, type ErrorCode } from "@puzzlewithme/shared";
 import { type RawData, WebSocket, WebSocketServer } from "ws";
@@ -30,6 +31,7 @@ const MAX_INVALID_MESSAGES = 5;
 const DEFAULT_HEARTBEAT_INTERVAL_MS = 30_000;
 
 export interface WebSocketServerOptions {
+  authenticate?: Authenticator | null;
   /** Keepalive cadence (§7.4 dead-socket reaping). Defaults to DEFAULT_HEARTBEAT_INTERVAL_MS; tests pass a small value. */
   heartbeatIntervalMs?: number;
 }
@@ -82,18 +84,37 @@ export function attachWebSocketServer(
   heartbeat.unref?.();
   wss.on("close", () => clearInterval(heartbeat));
 
+  const principals = new WeakMap<WebSocket, Principal>();
   server.on("upgrade", (req, socket, head) => {
     const url = new URL(req.url ?? "/", "http://internal.invalid");
     if (url.pathname !== WS_PATH) {
       socket.destroy();
       return;
     }
-    wss.handleUpgrade(req, socket, head, (ws) => {
-      wss.emit("connection", ws, req);
+    // Authentication may fetch rotating public keys; retain an error listener while awaiting it.
+    const onError = (): void => { socket.destroy(); };
+    socket.on("error", onError);
+    const authenticate = options.authenticate === null ? Promise.resolve(null) : (options.authenticate ?? rejectAuthentication)(req);
+    void authenticate.then((principal) => {
+      if (socket.destroyed) return;
+      socket.removeListener("error", onError);
+      wss.handleUpgrade(req, socket, head, (ws) => {
+        if (principal) principals.set(ws, principal);
+        wss.emit("connection", ws, req);
+      });
+    }).catch(() => {
+      if (!socket.destroyed) socket.end("HTTP/1.1 401 Unauthorized\r\nConnection: close\r\nContent-Length: 0\r\n\r\n");
     });
   });
 
   wss.on("connection", (ws: WebSocket) => {
+    const principal = principals.get(ws);
+    // Reconnect must re-authenticate; long-lived sockets cannot outlive their assertion.
+    const expiryTimer = principal?.expiresAt === undefined ? undefined : setTimeout(
+      () => ws.close(1008, "session expired; sign in again"),
+      Math.max(0, Math.min(2_147_483_647, principal.expiresAt - Date.now())),
+    );
+    ws.once("close", () => clearTimeout(expiryTimer));
     alive.add(ws);
     ws.on("pong", () => alive.add(ws));
 
@@ -129,6 +150,10 @@ export function attachWebSocketServer(
     };
 
     async function handle(data: RawData): Promise<void> {
+      if (principal?.expiresAt !== undefined && Date.now() >= principal.expiresAt) {
+        ws.close(1008, "session expired; sign in again");
+        return;
+      }
       let raw: unknown;
       try {
         raw = JSON.parse(rawDataToString(data));
@@ -155,7 +180,7 @@ export function attachWebSocketServer(
           reject("invalid_message", "first message must be a join");
           return;
         }
-        const outcome = await registry.join(conn, message.roomId, message.resumeToken, message.userId ?? null);
+        const outcome = await registry.join(conn, message.roomId, principal ? null : message.resumeToken, principal?.userId ?? message.userId ?? null);
         if (!outcome.ok) {
           if (outcome.reason === "room_full") conn.send({ type: "room_full" });
           else conn.send({ type: "error", code: "room_not_found", message: "room_not_found" });
@@ -164,7 +189,7 @@ export function attachWebSocketServer(
         }
         session = outcome.session;
         console.log(
-          `[ws ${connId}] joined room=${session.roomId} player=${session.playerId} userId=${message.userId ?? "-"}`,
+          `[ws ${connId}] joined room=${session.roomId} player=${session.playerId} userId=${principal?.userId ?? message.userId ?? "-"}`,
         );
         return;
       }

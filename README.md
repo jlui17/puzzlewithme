@@ -1,6 +1,6 @@
 # PuzzleWithMe
 
-A browser-based cooperative jigsaw puzzle game. Upload an image, pick a piece count, share the link; anyone with it joins the same live board and solves it together in real time, no account required. Full spec: [SPEC.md](./SPEC.md).
+A browser-based cooperative jigsaw puzzle game. Upload an image, pick a piece count, share the link; anyone with it joins the same live board and solves it together in real time, Cloudflare Access email accounts keep profiles and history consistent across devices. Full spec: [SPEC.md](./SPEC.md).
 
 ## Architecture
 
@@ -17,6 +17,16 @@ Five components (SPEC §6):
 `packages/shared` holds the wire protocol (client/server message types, zod validation for inbound client messages, room/group/score state shapes) that the server and web client both import.
 
 ## Running locally
+
+For local development, explicitly select a fixed test identity in the server shell:
+
+```sh
+export AUTH_MODE=development
+export DEV_USER_EMAIL=you@example.test
+```
+
+Development authentication binds the server to loopback and is rejected when
+`NODE_ENV=production`. Production uses Cloudflare Access; see DEPLOY.md.
 
 Two processes:
 

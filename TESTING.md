@@ -52,3 +52,21 @@ A bug should fail in the lowest layer that can express it. Before writing a test
 - Tests are colocated `*.test.ts` next to the module; shared doubles live in a plain `.ts` file (`test-fakes.ts`) so they never run as a suite.
 - Determinism over mocking: prefer a seed or an injected clock to a mocked module.
 - A "fixed" bug gets its reproducing test at the owning layer first, then the fix.
+
+## Authenticated accounts
+
+`auth/identity.test.ts` signs assertions with test keys and checks issuer,
+audience, signature, expiry, required claims, and production configuration.
+`net/auth-integration.test.ts` drives HTTP and WebSocket requests with those
+assertions, including forged ownership and cross-device joins. Legacy protocol
+suites explicitly pass `authenticate: null`; the server executable never does.
+Omitting authentication from the server factory denies requests by default.
+
+The store contract checks concurrent first logins. `account-migration.test.ts`
+checks read-only rehearsal, ownership conflicts, and preservation of scores and
+puzzle state. Production data needs its own reviewed mapping before rollout.
+
+The isolated browser script uses `preview@example.test` on loopback. Two browser
+profiles therefore represent the same account, not two people. Use signed test
+assertions in integration tests for different accounts; the final Cloudflare
+smoke test requires real authenticated sessions through the deployed hostname.

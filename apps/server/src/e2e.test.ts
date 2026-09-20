@@ -124,7 +124,7 @@ describe("full-stack e2e smoke test", () => {
 
   beforeAll(async () => {
     uploadsDir = await mkdtemp(join(tmpdir(), "puzzlewithme-e2e-"));
-    game = createGameServer({
+    game = createGameServer({ authenticate: null,
       roomStore: new InMemoryRoomStore(),
       imageStore: new LocalDiskImageStore(uploadsDir),
       // Large enough that the debounced checkpoint and idle sweep never fire

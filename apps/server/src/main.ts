@@ -6,6 +6,7 @@
 // laptop/VPS with no .env at all. dotenv/config no-ops silently when the
 // file is absent, which is what makes it work in both cases.
 import "dotenv/config";
+import { authenticatorFromEnv } from "./auth/identity.js";
 import { S3Client } from "@aws-sdk/client-s3";
 import { createGameServer } from "./net/server.js";
 import { type ImageStore } from "./images/image-store.js";
@@ -57,9 +58,9 @@ function start(): void {
   const port = Number(process.env["PORT"] ?? DEFAULT_PORT);
   const roomStore = buildRoomStore();
   const imageStore = buildImageStore();
-  const game = createGameServer({ roomStore, imageStore });
+  const game = createGameServer({ roomStore, imageStore, authenticate: authenticatorFromEnv(roomStore, process.env) });
 
-  game.server.listen(port, () => {
+  game.server.listen(port, process.env["AUTH_MODE"] === "development" ? "127.0.0.1" : "0.0.0.0", () => {
     console.log(`puzzlewithme server listening on http://localhost:${port} (ws at ${port}/ws)`);
   });
 

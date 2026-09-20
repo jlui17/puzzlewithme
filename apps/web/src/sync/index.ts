@@ -36,5 +36,4 @@ export {
   browserScheduler,
   createBrowserSocketFactory,
   createLocalStorageTokenStorage,
-  loadOrCreateUserId,
 } from "./websocket-adapter";

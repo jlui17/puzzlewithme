@@ -1,3 +1,4 @@
+import { AuthenticationError, rejectAuthentication, type Authenticator } from "../auth/identity.js";
 import { randomBytes, randomInt } from "node:crypto";
 import type { IncomingMessage, RequestListener, ServerResponse } from "node:http";
 import { MAX_PIECE_COUNT, MIN_PIECE_COUNT } from "@puzzlewithme/geometry";
@@ -15,6 +16,8 @@ import type { RoomStore } from "../store/room-store.js";
 import { parseBoundary, parseMultipart } from "./multipart.js";
 
 export interface HttpHandlerDeps {
+  authenticate?: Authenticator | null;
+  currentUserId?: string;
   roomStore: RoomStore;
   imageStore: ImageStore;
 }
@@ -187,7 +190,7 @@ async function handleCreateRoomFromUpload(
   // Record the creator's session history and gallery entry. Best-effort and
   // after create succeeds: neither write may fail room creation or orphan the
   // created room, so each is isolated in its own try/catch.
-  const userId = parts.find((part) => part.name === "userId")?.data.toString("utf8").trim();
+  const userId = deps.currentUserId ?? parts.find((part) => part.name === "userId")?.data.toString("utf8").trim();
   if (userId !== undefined && userId.length > 0 && userId.length <= MAX_USER_ID_LENGTH) {
     try {
       await deps.roomStore.recordMembership(roomId, userId, true);
@@ -238,7 +241,8 @@ async function handleCreateRoomFromGallery(
     sendJson(res, 400, { error: shapeError });
     return;
   }
-  const { imageId, pieces, userId } = parsed as { imageId?: unknown; pieces?: unknown; userId?: unknown };
+  const { imageId, pieces } = parsed as { imageId?: unknown; pieces?: unknown; userId?: unknown };
+  const userId = deps.currentUserId ?? (parsed as { userId?: unknown }).userId;
   if (
     typeof imageId !== "string" || imageId.length === 0 || imageId.length > MAX_USER_ID_LENGTH ||
     typeof userId !== "string" || userId.length === 0 || userId.length > MAX_USER_ID_LENGTH
@@ -479,6 +483,21 @@ async function handleGetRoomImage(res: ServerResponse, deps: HttpHandlerDeps, ro
 async function route(req: IncomingMessage, res: ServerResponse, deps: HttpHandlerDeps): Promise<void> {
   const method = req.method ?? "GET";
   const url = new URL(req.url ?? "/", "http://internal.invalid");
+  res.setHeader("cache-control", "private, no-store");
+  if (deps.authenticate !== null) {
+    const principal = await (deps.authenticate ?? rejectAuthentication)(req);
+    deps = { ...deps, currentUserId: principal.userId };
+    if (method === "GET" && url.pathname === "/api/me") {
+      sendJson(res, 200, { userId: principal.userId, email: principal.email, displayName: principal.displayName });
+      return;
+    }
+    const owner = /^\/api\/users\/([^/]+)/.exec(url.pathname);
+    if (owner && decodeURIComponent(owner[1]!) !== principal.userId) {
+      sendJson(res, 403, { error: "forbidden" });
+      return;
+    }
+  }
+
 
   if (method === "POST" && url.pathname === "/api/rooms") {
     await handleCreateRoom(req, res, deps);
@@ -595,6 +614,10 @@ export function createHttpHandler(deps: HttpHandlerDeps): RequestListener {
       // A handler bug must never crash the process (NFR-7-adjacent: the
       // server stays up for every other room/request even if one request's
       // handling throws unexpectedly).
+      if (err instanceof AuthenticationError) {
+        sendJson(res, 401, { error: "Sign in again to continue." });
+        return;
+      }
       console.error("unhandled error handling request", err);
       if (!res.headersSent) {
         sendJson(res, 500, { error: "internal_error" });

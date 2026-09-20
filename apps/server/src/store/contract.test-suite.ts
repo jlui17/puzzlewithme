@@ -33,6 +33,17 @@ export function runRoomStoreContractTests(storeName: string, getStore: () => Roo
   }
 
   describe(`${storeName} (RoomStore contract)`, () => {
+    it("atomically resolves concurrent logins and preserves renamed profiles", async () => {
+      const store = getStore();
+      const email = `${randomUUID()}@example.test`;
+      const accounts = await Promise.all(Array.from({ length: 20 }, () => store.findOrCreateAccount(email)));
+      expect(new Set(accounts.map((a) => a.userId)).size).toBe(1);
+      const account = accounts[0]!;
+      await store.setUserDisplayName(account.userId, "Updated");
+      expect(await store.findOrCreateAccount(email.toUpperCase())).toEqual({ ...account, displayName: "Updated" });
+      expect((await store.findOrCreateAccount(`different-${email}`)).userId).not.toBe(account.userId);
+    });
+
     it("create returns the empty deviation record and load round-trips it", async () => {
       const store = getStore();
       const settings = settingsFor(randomUUID());

@@ -136,7 +136,7 @@ async function join(
 
 beforeEach(async () => {
   store = new InMemoryRoomStore();
-  game = createGameServer({
+  game = createGameServer({ authenticate: null,
     roomStore: store,
     imageStore: stubImageStore,
     // Large intervals so the debounce and idle sweep never fire mid-test; the
@@ -309,7 +309,7 @@ describe("websocket net layer", () => {
     // sleeping; the beforeEach server's default cadence never fires mid-test.
     const hbStore = new InMemoryRoomStore();
     await hbStore.create({ roomId: "hb-room", ...BASE_SETTINGS });
-    const hbGame = createGameServer({
+    const hbGame = createGameServer({ authenticate: null,
       roomStore: hbStore,
       imageStore: stubImageStore,
       registry: { checkpointIntervalMs: 3_600_000, sweepIntervalMs: 3_600_000 },

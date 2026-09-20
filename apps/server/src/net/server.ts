@@ -1,3 +1,4 @@
+import type { Authenticator } from "../auth/identity.js";
 import { createServer as createHttpServer, type Server as HttpServer } from "node:http";
 import { createHttpHandler } from "../http/handler.js";
 import type { ImageStore } from "../images/image-store.js";
@@ -6,6 +7,8 @@ import { RoomRegistry, type RoomRegistryOptions } from "./registry.js";
 import { attachWebSocketServer } from "./ws.js";
 
 export interface GameServerOptions {
+  /** null is only for isolated legacy protocol tests; omitted authentication denies requests. */
+  authenticate?: Authenticator | null;
   roomStore: RoomStore;
   imageStore: ImageStore;
   /** Registry tuning (clock, checkpoint/sweep intervals, snap tolerance) forwarded verbatim; tests inject these for determinism. */
@@ -28,10 +31,11 @@ export interface GameServer {
  */
 export function createGameServer(options: GameServerOptions): GameServer {
   const registry = new RoomRegistry({ store: options.roomStore, ...options.registry });
-  const handler = createHttpHandler({ roomStore: options.roomStore, imageStore: options.imageStore });
+  const handler = createHttpHandler({ roomStore: options.roomStore, imageStore: options.imageStore, authenticate: options.authenticate });
   const server = createHttpServer(handler);
   const wss = attachWebSocketServer(server, registry, {
     heartbeatIntervalMs: options.heartbeatIntervalMs,
+    authenticate: options.authenticate,
   });
 
   const close = async (): Promise<void> => {

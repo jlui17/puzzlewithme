@@ -1,3 +1,6 @@
+import { randomUUID } from "node:crypto";
+import { randomName } from "../engine/names.js";
+import { normalizeEmail, type Account } from "../auth/identity.js";
 import type { RoomSettings, UserImageSummary, UserRoomSummary } from "@puzzlewithme/shared";
 import type { SerializedRoomState } from "../engine/types.js";
 
@@ -8,6 +11,7 @@ import type { SerializedRoomState } from "../engine/types.js";
  * tests and local dev.
  */
 export interface RoomStore {
+  findOrCreateAccount(email: string): Promise<Account>;
   /** Create the initial, deviation-free record for a new room (§7.1). Rejects a duplicate roomId. */
   create(settings: RoomSettings): Promise<SerializedRoomState>;
   /** A room's persisted state, or null for an unknown id (room_not_found upstream). */
@@ -78,6 +82,19 @@ interface RoomTimestamps {
 }
 
 export class InMemoryRoomStore implements RoomStore {
+  private readonly accounts = new Map<string, string>();
+
+  async findOrCreateAccount(rawEmail: string): Promise<Account> {
+    const email = normalizeEmail(rawEmail);
+    let userId = this.accounts.get(email);
+    if (userId === undefined) {
+      userId = randomUUID();
+      this.accounts.set(email, userId);
+      this.displayNames.set(userId, randomName());
+    }
+    return { userId, email, displayName: this.displayNames.get(userId)! };
+  }
+
   private readonly rooms = new Map<string, SerializedRoomState>();
   private readonly timestamps = new Map<string, RoomTimestamps>();
   /** roomId -> (userId -> membership row). Mirrors the SQL stores' room_members table. */

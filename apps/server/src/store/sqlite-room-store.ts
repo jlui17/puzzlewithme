@@ -1,3 +1,6 @@
+import { randomUUID } from "node:crypto";
+import { randomName } from "../engine/names.js";
+import { normalizeEmail, type Account } from "../auth/identity.js";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import Database from "better-sqlite3";
@@ -73,14 +76,16 @@ export class SqliteRoomStore implements RoomStore {
     if (!memberColumns.some((c) => c.name === "name")) {
       this.db.exec(`ALTER TABLE room_members ADD COLUMN name TEXT`);
     }
-    // App-wide user attributes keyed by the persistent anonymous userId. Today
-    // just the display name; the natural place for future sign-up fields.
+    // Existing IDs remain stable; email is nullable only for unmigrated legacy profiles.
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS users (
         user_id TEXT PRIMARY KEY,
         display_name TEXT NOT NULL
       )
     `);
+    const userColumns = this.db.prepare("PRAGMA table_info(users)").all() as Array<{ name: string }>;
+    if (!userColumns.some((c) => c.name === "email")) this.db.exec("ALTER TABLE users ADD COLUMN email TEXT");
+    this.db.exec("CREATE UNIQUE INDEX IF NOT EXISTS users_email ON users(email)");
     // Upload gallery: who uploaded which image (id = the ImageStore key).
     // width/height are the ORIGINAL upload's dimensions (see UserImageSummary
     // for why). No FK from rooms' imageRef — it lives inside the settings
@@ -96,6 +101,14 @@ export class SqliteRoomStore implements RoomStore {
       )
     `);
     this.db.exec(`CREATE INDEX IF NOT EXISTS images_owner_user_id ON images (owner_user_id)`);
+  }
+
+  async findOrCreateAccount(rawEmail: string): Promise<Account> {
+    const email = normalizeEmail(rawEmail);
+    this.db.prepare("INSERT INTO users (user_id, display_name, email) VALUES (?, ?, ?) ON CONFLICT(email) DO NOTHING")
+      .run(randomUUID(), randomName(), email);
+    return this.db.prepare("SELECT user_id AS userId, email, display_name AS displayName FROM users WHERE email = ?")
+      .get(email) as Account;
   }
 
   async create(settings: RoomSettings): Promise<SerializedRoomState> {

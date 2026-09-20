@@ -12,7 +12,6 @@ import { useRouter } from "next/navigation";
 import * as api from "../src/api";
 import type { Source } from "../src/api";
 import { imageUrl, roomImageUrl } from "../src/config";
-import { loadOrCreateUserId } from "../src/sync";
 import { Cup, TableSurface } from "../src/table";
 import { ThemeSwitch } from "../src/theme-switcher";
 
@@ -33,14 +32,20 @@ export default function CreatePage() {
   // The native file input keeps showing its chosen filename even after React
   // state moves to a gallery pick; clearing needs a direct .value reset.
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  // Resolved on the client only (localStorage is unavailable during SSR).
+  // Resolved from the authenticated API after mount.
   const [userId, setUserId] = useState<string | null>(null);
   const [sessions, setSessions] = useState<UserRoomSummary[]>([]);
   const [gallery, setGallery] = useState<UserImageSummary[]>([]);
 
   useEffect(() => {
-    setUserId(loadOrCreateUserId());
+    let cancelled = false;
+    void api.getMe().then((result) => {
+      if (cancelled) return;
+      if (result.ok) setUserId(result.value.userId);
+      else setError("Could not load your account. Reload to sign in again.");
+    });
     return () => {
+      cancelled = true;
       if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
     };
   }, []);
@@ -290,7 +295,7 @@ export default function CreatePage() {
             </div>
           </div>
 
-          <button className="brew-btn" disabled={source === null || submitting} onClick={onCreate}>
+          <button className="brew-btn" disabled={userId === null || source === null || submitting} onClick={onCreate}>
             {submitting ? "Brewing…" : "Brew this puzzle →"}
           </button>
 

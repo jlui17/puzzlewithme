@@ -60,8 +60,8 @@ export async function deleteImage(userId: string, imageId: string): Promise<ApiR
 /**
  * Create a room from either source kind. A gallery source sends a JSON body
  * (no bytes re-sent); an upload sends multipart form data. `userId` lets the
- * server record this browser as the room's creator (session history) and the
- * image's uploader (gallery); null keeps the anonymous flow.
+ * server identify legacy protocol requests in isolated tests. Production always
+ * uses the authenticated account, regardless of this compatibility field.
  */
 export async function createRoom(
   source: Source,
@@ -157,4 +157,9 @@ export async function setDisplayName(
   } catch {
     return { ok: false, error: "Could not reach the server." };
   }
+}
+
+/** Identity comes from the authenticated request, never browser storage. */
+export function getMe(): Promise<ApiResult<{ userId: string; email: string; displayName: string }>> {
+  return getJson("/api/me");
 }

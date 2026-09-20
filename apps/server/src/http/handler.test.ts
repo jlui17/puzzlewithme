@@ -34,7 +34,7 @@ describe("http handler", () => {
     uploadsDir = await mkdtemp(join(tmpdir(), "puzzlewithme-http-images-"));
     roomStore = new InMemoryRoomStore();
     const imageStore = new LocalDiskImageStore(uploadsDir);
-    server = createServer(createHttpHandler({ roomStore, imageStore }));
+    server = createServer(createHttpHandler({ authenticate: null, roomStore, imageStore }));
     await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
     const address = server.address();
     if (address === null || typeof address === "string") throw new Error("expected a bound TCP address");
