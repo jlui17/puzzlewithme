@@ -9,6 +9,7 @@ import {
 } from "@puzzlewithme/shared";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import * as api from "../src/api";
 import type { Source } from "../src/api";
 import { imageUrl, roomImageUrl } from "../src/config";
@@ -35,29 +36,37 @@ export default function CreatePage() {
   // Resolved from the authenticated API after mount.
   const [userId, setUserId] = useState<string | null>(null);
   const [sessions, setSessions] = useState<UserRoomSummary[]>([]);
+  const [historyStatus, setHistoryStatus] = useState<"loading" | "ready" | "error">("loading");
+  const [historyAttempt, setHistoryAttempt] = useState(0);
+  const [accountAttempt, setAccountAttempt] = useState(0);
   const [gallery, setGallery] = useState<UserImageSummary[]>([]);
 
   useEffect(() => {
     let cancelled = false;
     void api.getMe().then((result) => {
       if (cancelled) return;
-      if (result.ok) setUserId(result.value.userId);
-      else setError("Could not load your account. Reload to sign in again.");
+      if (result.ok) {
+        setUserId(result.value.userId);
+        setError((previous) => previous === "Could not load your account. Reload to sign in again." ? null : previous);
+      } else {
+        setError("Could not load your account. Reload to sign in again.");
+        setHistoryStatus("error");
+      }
     });
     return () => {
       cancelled = true;
-      if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
     };
+  }, [accountAttempt]);
+
+  useEffect(() => () => {
+    if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
   }, []);
 
   // Runs once the client-only userId resolves (null during SSR/first paint).
-  // Session history and the gallery are conveniences; a failure just hides them.
+  // Gallery loading is independent of history retries.
   useEffect(() => {
     if (userId === null) return;
     let cancelled = false;
-    void api.listRooms(userId).then((res) => {
-      if (!cancelled && res.ok) setSessions(res.value);
-    });
     void api.listImages(userId).then((res) => {
       if (!cancelled && res.ok) setGallery(res.value);
     });
@@ -65,6 +74,28 @@ export default function CreatePage() {
       cancelled = true;
     };
   }, [userId]);
+
+  useEffect(() => {
+    if (userId === null) return;
+    let cancelled = false;
+    setHistoryStatus("loading");
+    void api.listRooms(userId).then((res) => {
+      if (cancelled) return;
+      if (res.ok) setSessions(res.value);
+      setHistoryStatus(res.ok ? "ready" : "error");
+    });
+    return () => { cancelled = true; };
+  }, [userId, historyAttempt]);
+
+  const unfinished = sessions.filter((s) => s.status !== "completed");
+  const finished = sessions.filter((s) => s.status === "completed");
+  const sessionList = (items: UserRoomSummary[]) => (
+    <ul className="sessions-list">
+      {items.map((s) => (
+        <SessionRow key={s.roomId} session={s} onRename={(name) => onRenameSession(s.roomId, name)} />
+      ))}
+    </ul>
+  );
 
   // The same deriveGrid the server runs on the original upload's dimensions,
   // so the count shown here is exactly the count the room will have.
@@ -307,21 +338,37 @@ export default function CreatePage() {
         </section>
 
         <aside className="side-col">
-          {sessions.length > 0 && (
-            <>
-              <div className="side-head">left on the table…</div>
-              <ul className="sessions-list">
-                {sessions.map((s) => (
-                  <SessionRow
-                    key={s.roomId}
-                    session={s}
-                    onOpen={() => router.push(`/room/${encodeURIComponent(s.roomId)}`)}
-                    onRename={(name) => onRenameSession(s.roomId, name)}
-                  />
-                ))}
-              </ul>
-            </>
-          )}
+          <section className="session-history" aria-labelledby="history-heading" aria-busy={historyStatus === "loading"}>
+            <header>
+              <h2 id="history-heading" className="side-head">left on the table…</h2>
+              <p className="history-subtitle">Puzzles you started or joined.</p>
+            </header>
+            {historyStatus === "loading" && <p className="history-message" role="status">Loading your puzzles…</p>}
+            {historyStatus === "error" && (
+              <div className="history-message" role="alert">
+                Couldn’t load your puzzles. <button type="button" className="history-retry" onClick={() => {
+                  setHistoryStatus("loading");
+                  if (userId === null) setAccountAttempt((attempt) => attempt + 1);
+                  else setHistoryAttempt((attempt) => attempt + 1);
+                }}>Retry</button>
+              </div>
+            )}
+            {historyStatus === "ready" && (
+              <>
+                {sessions.length === 0 ? (
+                  <p className="history-message">No puzzles yet. Start one or join a friend’s link, and it’ll be here when you come back.</p>
+                ) : unfinished.length === 0 ? (
+                  <p className="history-message">All caught up. Your finished puzzles are below.</p>
+                ) : sessionList(unfinished)}
+                {finished.length > 0 && (
+                  <details className="finished-puzzles">
+                    <summary>Finished puzzles <span>({finished.length})</span></summary>
+                    {sessionList(finished)}
+                  </details>
+                )}
+              </>
+            )}
+          </section>
           {userId !== null && <Identity userId={userId} />}
         </aside>
       </div>
@@ -333,11 +380,9 @@ export default function CreatePage() {
 
 function SessionRow({
   session,
-  onOpen,
   onRename,
 }: {
   session: UserRoomSummary;
-  onOpen: () => void;
   onRename: (name: string | null) => Promise<boolean>;
 }) {
   const [editing, setEditing] = useState(false);
@@ -346,9 +391,7 @@ function SessionRow({
 
   const pct =
     session.totalPieces > 0 ? Math.round((session.placedPieces / session.totalPieces) * 100) : 0;
-  const fallbackTitle = `${session.createdByUser ? "Created" : "Joined"} ${new Date(
-    session.createdAt,
-  ).toLocaleDateString()}`;
+  const fallbackTitle = "Untitled puzzle";
 
   async function commit(): Promise<void> {
     const trimmed = draft.trim().slice(0, MAX_ROOM_NAME_LENGTH);
@@ -365,15 +408,7 @@ function SessionRow({
 
   return (
     <li className="session-row">
-      <div
-        className="session-card"
-        role="button"
-        tabIndex={0}
-        onClick={editing ? undefined : onOpen}
-        onKeyDown={(e) => {
-          if (!editing && (e.key === "Enter" || e.key === " ")) onOpen();
-        }}
-      >
+      <div className="session-card">
         <div className="session-thumb">
           {/* Same-origin room image; next/image adds no value for an API route. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -401,7 +436,10 @@ function SessionRow({
             />
           ) : (
             <span className="session-name">
-              {session.name ?? fallbackTitle}
+              <Link className="session-open" href={`/room/${encodeURIComponent(session.roomId)}`}
+                aria-label={`${session.status === "completed" ? "View puzzle" : "Continue"}: ${session.name ?? fallbackTitle}`}>
+                {session.name ?? fallbackTitle}
+              </Link>
               {session.status === "completed" && <span className="session-done"> · finished</span>}
             </span>
           )}
@@ -409,8 +447,13 @@ function SessionRow({
             <div className="session-bar-fill" style={{ width: `${pct}%` }} />
           </div>
           <span className="session-meta">
-            {session.placedPieces} of {session.totalPieces} ·{" "}
-            {new Date(session.lastActiveAt).toLocaleString()}
+            {session.placedPieces} of {session.totalPieces} pieces
+          </span>
+          <span className="session-meta">
+            Created at <time dateTime={session.createdAt}>{new Date(session.createdAt).toLocaleString()}</time>
+          </span>
+          <span className="session-action" aria-hidden="true">
+            {session.status === "completed" ? "View puzzle →" : "Continue →"}
           </span>
         </div>
       </div>

@@ -1,3 +1,4 @@
+import { recordMembershipWithRetry } from "../store/record-membership.js";
 import { AuthenticationError, rejectAuthentication, type Authenticator } from "../auth/identity.js";
 import { randomBytes, randomInt } from "node:crypto";
 import type { IncomingMessage, RequestListener, ServerResponse } from "node:http";
@@ -189,14 +190,10 @@ async function handleCreateRoomFromUpload(
 
   // Record the creator's session history and gallery entry. Best-effort and
   // after create succeeds: neither write may fail room creation or orphan the
-  // created room, so each is isolated in its own try/catch.
+  // created room, so membership retries are bounded and gallery errors are caught.
   const userId = deps.currentUserId ?? parts.find((part) => part.name === "userId")?.data.toString("utf8").trim();
   if (userId !== undefined && userId.length > 0 && userId.length <= MAX_USER_ID_LENGTH) {
-    try {
-      await deps.roomStore.recordMembership(roomId, userId, true);
-    } catch (err) {
-      console.error(`recording creator membership failed for room ${roomId}`, err);
-    }
+    await recordMembershipWithRetry(deps.roomStore, roomId, userId, true);
     try {
       await deps.roomStore.recordImage(imageRef, userId, processed.image.originalWidth, processed.image.originalHeight);
     } catch (err) {
@@ -284,11 +281,7 @@ async function handleCreateRoomFromGallery(
   await deps.roomStore.create(settings);
 
   // Same best-effort creator record as the upload path.
-  try {
-    await deps.roomStore.recordMembership(roomId, userId, true);
-  } catch (err) {
-    console.error(`recording creator membership failed for room ${roomId}`, err);
-  }
+  await recordMembershipWithRetry(deps.roomStore, roomId, userId, true);
 
   sendJson(res, 201, { roomId, rows, cols });
 }

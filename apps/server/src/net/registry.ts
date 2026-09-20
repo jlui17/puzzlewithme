@@ -2,6 +2,7 @@ import type { ClientMessage, ErrorCode, ServerMessage } from "@puzzlewithme/shar
 import { ensureUserDisplayName } from "../engine/names.js";
 import { RoomEngine } from "../engine/room.js";
 import type { MutationRejectionReason } from "../engine/types.js";
+import { recordMembershipWithRetry } from "../store/record-membership.js";
 import type { RoomStore } from "../store/room-store.js";
 
 /**
@@ -150,7 +151,7 @@ export class RoomRegistry {
     // recorded at room-create with created=true; the store OR's the flag, so
     // this false never clears it). Best-effort — a failed write must not fail
     // the join, matching saveRoom's non-fatal contract.
-    if (userId !== null) await this.recordMembership(roomId, userId, false);
+    if (userId !== null) await recordMembershipWithRetry(this.store, roomId, userId, false);
 
     const playerId = result.identity.id;
     // Whether this identity was already on the board (another tab); if so its
@@ -440,15 +441,6 @@ export class RoomRegistry {
     if (room.checkpointTimer !== null) {
       clearTimeout(room.checkpointTimer);
       room.checkpointTimer = null;
-    }
-  }
-
-  private async recordMembership(roomId: string, userId: string, createdByUser: boolean): Promise<void> {
-    try {
-      await this.store.recordMembership(roomId, userId, createdByUser);
-    } catch (err) {
-      // Session history is a nice-to-have; a write failure must not break play.
-      console.error(`recording membership failed for room ${roomId}`, err);
     }
   }
 

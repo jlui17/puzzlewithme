@@ -1,5 +1,5 @@
 import type { RoomSettings, ServerMessage } from "@puzzlewithme/shared";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { HOLD_TIMEOUT_MS } from "../engine/constants.js";
 import { InMemoryRoomStore } from "../store/room-store.js";
 import { RoomRegistry, type RoomConnection, type RoomSession } from "./registry.js";
@@ -184,4 +184,22 @@ describe("room fan-out policy", () => {
 
     expect(b.conn.ofType("released")).toMatchObject([{ groupId: "0-0" }]);
   });
+});
+
+it("still joins and records participation after a transient membership failure", async () => {
+  const write = vi.spyOn(store, "recordMembership").mockRejectedValueOnce(new Error("busy"));
+  vi.useFakeTimers();
+  try {
+    const joining = joinRoom(ROOM, "retry-user");
+    await vi.advanceTimersByTimeAsync(100);
+    const joined = await joining;
+    expect(joined.conn.ofType("joined")).toHaveLength(1);
+    expect(await store.listUserRooms("retry-user")).toEqual([
+      expect.objectContaining({ roomId: ROOM, createdByUser: false }),
+    ]);
+    expect(write).toHaveBeenCalledTimes(2);
+  } finally {
+    vi.useRealTimers();
+    write.mockRestore();
+  }
 });

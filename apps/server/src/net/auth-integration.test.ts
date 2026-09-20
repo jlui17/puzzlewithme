@@ -124,3 +124,24 @@ it("closes an authenticated socket when its assertion expires", async () => {
     expect((await closed)[0]).toBe(1008);
   } finally { await expiring.close(); }
 });
+
+it("keeps the same session in creator and participant histories after leaving and rejoining", async () => {
+  const owner = await store.findOrCreateAccount("one@example.test");
+  await store.recordMembership("room", owner.userId, true);
+  const creator = await join("one@example.test");
+  const participant = await join("two@example.test");
+  for (const connection of [creator, participant]) {
+    const closed = once(connection.ws, "close");
+    connection.ws.close();
+    await closed;
+  }
+  for (const [email, createdByUser] of [["one@example.test", true], ["two@example.test", false]] as const) {
+    const account = await store.findOrCreateAccount(email);
+    const response = await fetch(`${base}/api/users/${account.userId}/rooms`, { headers: await headers(email) });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ rooms: [{ roomId: "room", createdByUser }] });
+    const rejoined = await join(email);
+    expect(rejoined.message.type).toBe("joined");
+    expect(await store.listUserRooms(account.userId)).toHaveLength(1);
+  }
+});
