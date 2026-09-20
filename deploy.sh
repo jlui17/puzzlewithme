@@ -41,6 +41,7 @@ rsync -az --delete \
   --exclude .git \
   --exclude node_modules \
   --exclude .next \
+  --exclude .next-e2e \
   --exclude dist \
   --exclude data \
   --exclude uploaded-images \
