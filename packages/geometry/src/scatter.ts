@@ -107,7 +107,6 @@ const PIECE_HALF = CELL_SIZE / 2;
 const OVERHANG = TAB_MAX_HEIGHT_RATIO * CELL_SIZE;
 // Upper bound on per-piece jitter; the applied jitter (below) is never larger.
 const MAX_JITTER = 0.15 * CELL_SIZE;
-// Full footprint radius: keep this clear of the frame and the board edge.
 const FOOTPRINT = PIECE_HALF + OVERHANG + MAX_JITTER;
 
 /**
@@ -135,16 +134,22 @@ export function initialScatter(rows: number, cols: number, seed: string | number
   const frameW = cols * CELL_SIZE;
   const frameH = rows * CELL_SIZE;
 
-  // The play area is sized to hold the pieces at this pitch, so the loop below
-  // normally runs once; it only shrinks the pitch if some degenerate shape
-  // yields too few cells anyway.
+  // The play area normally fits at the configured pitch. If it does not,
+  // retry with less jitter to leave room for the largest tabs.
   let pitch = SCATTER_PITCH;
   const minPitch = CELL_SIZE * 1.05; // still guarantees non-overlap after jitter
   let centers: Vec2[] = [];
-  while (pitch >= minPitch) {
-    centers = validCellCenters(pitch, bounds, frameW, frameH);
+  let jitterCap = MAX_JITTER;
+  while (jitterCap >= 0) {
+    pitch = SCATTER_PITCH;
+    const footprint = PIECE_HALF + OVERHANG + jitterCap;
+    while (pitch >= minPitch) {
+      centers = validCellCenters(pitch, bounds, frameW, frameH, footprint);
+      if (centers.length >= count) break;
+      pitch *= 0.85;
+    }
     if (centers.length >= count) break;
-    pitch *= 0.85;
+    jitterCap -= 0.05 * CELL_SIZE;
   }
 
   // Nearest-first, then a random pick from that pool: compact but not packed.
@@ -159,7 +164,7 @@ export function initialScatter(rows: number, cols: number, seed: string | number
 
   // Jitter kept below half the pitch slack so two occupied cells (>= pitch
   // apart on one axis) still can't overlap as CELL_SIZE boxes.
-  const jitter = Math.min(MAX_JITTER, (pitch - CELL_SIZE) / 2);
+  const jitter = Math.min(jitterCap, (pitch - CELL_SIZE) / 2);
 
   const positions: Vec2[] = [];
   for (let id = 0; id < count; id++) {
@@ -184,16 +189,17 @@ function validCellCenters(
   bounds: Bounds,
   frameW: number,
   frameH: number,
+  footprint: number,
 ): Vec2[] {
   const centers: Vec2[] = [];
   // Keep the whole jittered footprint inside the play area.
-  const loX = bounds.minX + FOOTPRINT;
-  const hiX = bounds.maxX - FOOTPRINT;
-  const loY = bounds.minY + FOOTPRINT;
-  const hiY = bounds.maxY - FOOTPRINT;
+  const loX = bounds.minX + footprint;
+  const hiX = bounds.maxX - footprint;
+  const loY = bounds.minY + footprint;
+  const hiY = bounds.maxY - footprint;
   // Frame exclusion: skip any cell whose center falls within the frame expanded
   // by a full footprint, so no scattered piece (incl. tabs and jitter) enters it.
-  const excl = FOOTPRINT;
+  const excl = footprint;
 
   for (let cy = loY; cy <= hiY + 1e-6; cy += pitch) {
     for (let cx = loX; cx <= hiX + 1e-6; cx += pitch) {

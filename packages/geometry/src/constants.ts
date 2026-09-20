@@ -79,9 +79,10 @@ export const TAB_BULB_HALF_RATIO = 0.2;
 /**
  * Per-edge jitter ranges (fractions of CELL_SIZE) so no two edges look
  * identical (FR-6, "per-edge random variation"): TAB_POS_JITTER moves the tab
- * along the edge, TAB_SIZE_JITTER varies its height. Raised from 0.04/0.03 (the
- * original values) to 0.06/0.05 to make the variation between pieces obvious at
- * a glance, not just on close inspection.
+ * along the edge, TAB_SIZE_JITTER varies its height. Position jitter was raised
+ * from the original 0.04 to 0.06. Size jitter was raised from 0.03 to 0.10, so
+ * tabs range from 18% to 38% of a cell and opposite sides of one piece can read
+ * as dramatically different sizes.
  *
  * TAB_TILT_JITTER and TAB_ASYMMETRY_JITTER are new: TILT offsets the bulb peak
  * from the neck's center (buildTabEdge's `apexU`), so the knob leans instead of
@@ -107,7 +108,7 @@ export const TAB_BULB_HALF_RATIO = 0.2;
  * re-running this margin check.
  */
 export const TAB_POS_JITTER = 0.06;
-export const TAB_SIZE_JITTER = 0.05;
+export const TAB_SIZE_JITTER = 0.1;
 export const TAB_TILT_JITTER = 0.04;
 export const TAB_ASYMMETRY_JITTER = 0.05;
 

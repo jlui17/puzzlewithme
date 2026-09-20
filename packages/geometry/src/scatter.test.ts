@@ -121,6 +121,10 @@ describe("initialScatter", () => {
       }
     }
   });
+
+  it("fits the minimum 2x2 puzzle with the maximum tab range", () => {
+    expect(initialScatter(2, 2, "small")).toHaveLength(4);
+  });
 });
 
 describe("initialScatter at max tier scale (NFR-1: 1000 pieces)", () => {
@@ -146,10 +150,16 @@ describe("initialScatter at max tier scale (NFR-1: 1000 pieces)", () => {
   });
 
   it("keeps footprints non-overlapping at scale", () => {
+    let overlap = false;
+    outer:
     for (let i = 0; i < positions.length; i++) {
       for (let j = i + 1; j < positions.length; j++) {
-        expect(boxesOverlap(positions[i]!, positions[j]!)).toBe(false);
+        if (boxesOverlap(positions[i]!, positions[j]!)) {
+          overlap = true;
+          break outer;
+        }
       }
     }
+    expect(overlap).toBe(false);
   });
 });

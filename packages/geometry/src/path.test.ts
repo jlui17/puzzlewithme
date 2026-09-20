@@ -96,6 +96,21 @@ describe("buildTabEdge: per-edge variation", () => {
     expect(tilted[6]!.x).toBeCloseTo(neckMidX + TAB_TILT_JITTER * CELL_SIZE, 6);
   });
 
+  it("allows dramatically small and large tabs", () => {
+    const small = buildTabEdge("horizontal", { x: 0, y: 0 }, 1, {
+      ...zero,
+      size: -TAB_SIZE_JITTER,
+    });
+    const large = buildTabEdge("horizontal", { x: 0, y: 0 }, 1, {
+      ...zero,
+      size: TAB_SIZE_JITTER,
+    });
+
+    expect(small[6]!.y).toBeCloseTo(0.18 * CELL_SIZE, 6);
+    expect(large[6]!.y).toBeCloseTo(0.38 * CELL_SIZE, 6);
+    expect(large[6]!.y / small[6]!.y).toBeGreaterThan(2);
+  });
+
   it("keeps every control point clear of the edge's corners at every jitter extreme", () => {
     // Exhaustive over the +-1 corners of the 4D jitter cube: this is exactly
     // the worst case the constants.ts margin comment reasons about, so a future
