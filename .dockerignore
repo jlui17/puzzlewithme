@@ -11,3 +11,6 @@ uploaded-images
 **/uploaded-images
 *.db
 coverage
+.luidocs
+.worktrees
+.e2e

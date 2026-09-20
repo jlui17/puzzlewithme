@@ -46,6 +46,8 @@ rsync -az --delete \
   --exclude uploaded-images \
   --exclude coverage \
   --exclude .e2e \
+  --exclude .luidocs \
+  --exclude .worktrees \
   --exclude .claude/worktrees \
   --exclude '*.tsbuildinfo' \
   --exclude next-env.d.ts \
@@ -70,7 +72,7 @@ echo "==> health check"
 HEALTH_CHECK="
 const check = () => Promise.all([
   fetch('http://localhost:3000/').then(r => { if (r.status !== 200) throw new Error('homepage ' + r.status); }),
-  fetch('http://localhost:3000/api/rooms/deploy-check').then(r => { if (r.status !== 404) throw new Error('api ' + r.status); }),
+  fetch('http://localhost:3000/api/me').then(r => { if (r.status !== 401) throw new Error('unauthenticated api ' + r.status); }),
 ]);
 const retry = (n) => check().then(() => console.log('healthy')).catch(e => {
   if (n <= 0) { console.error(e.message); process.exit(1); }
