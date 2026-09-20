@@ -39,7 +39,7 @@ A bug should fail in the lowest layer that can express it. Before writing a test
 
 **Exactly one full-stack smoke.** `apps/server/src/e2e.test.ts` wires everything the way `main.ts` does: real multipart upload, two WS clients playing a real solve, a late joiner converging. It exists so seam-only bugs have somewhere to surface. Resist adding more tests at this layer; a failure that could be expressed lower belongs lower.
 
-**Browser tier: on demand, not in `bun run test`.** The `verify` skill (`.claude/skills/verify/SKILL.md`) drives the real app with agent-browser against an isolated stack (`scripts/e2e-env.sh`, ports 3100/3101). It is the only coverage for the PixiJS canvas actually rendering and for pointer input, and it stays manual because headless WebGL is fragile enough (documented in the skill) that automating it would spend its budget fighting the harness.
+**Browser tier: on demand, not in `bun run test`.** The [verify skill](.claude/skills/verify/SKILL.md) owns browser selection, isolated-stack checks, and authenticated production verification. It is the only coverage for the PixiJS canvas actually rendering and for pointer input, and it stays manual because headless WebGL is fragile enough (documented in the skill) that automating it would spend its budget fighting the harness.
 
 ## Deliberately untested
 

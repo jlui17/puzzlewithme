@@ -1,20 +1,26 @@
 ---
 name: verify
-description: Validate a change end-to-end in a real browser with agent-browser. Boots an isolated web+server stack, creates a puzzle room, drives the PixiJS board, and checks sync across two browser sessions. Use after any change to apps/web, apps/server, packages/geometry, or packages/shared that has a runtime surface.
+description: Verify runtime changes in a real browser, or smoke-test production through Cloudflare Access. Use after changes to apps/web, apps/server, packages/geometry, or packages/shared with a runtime surface.
 ---
 
 # Browser validation for PuzzleWithMe
 
-Drives the real app (Next.js web + game server + WebSocket sync + PixiJS board) with the `agent-browser` CLI. Every command below was validated working; deviate only when the UI has changed.
+Drives the real app (Next.js web + game server + WebSocket sync + PixiJS board). Prefer the OpenClaw browser when available; use `agent-browser` as the fallback.
 
 This is the browser tier of the repo's test strategy (TESTING.md): the only coverage for the Pixi scene actually rendering and for real pointer events, run on demand rather than in `bun run test`. Anything expressible as a vitest test at a lower layer belongs there, not here.
 
-## Hard requirements (read first)
+## Choose the target and browser
 
-- **Run every `agent-browser` command from the repo root.** `./agent-browser.json` there passes `--use-angle=metal` to Chrome. Without it, headless Chrome falls back to swiftshader WebGL, which deadlocks on the board's `antialias: true` canvas and wedges the whole agent-browser daemon (every later command fails with `Resource temporarily unavailable (os error 35)`).
-- **If the daemon wedges anyway**: `pkill -9 -f agent-browser-darwin; pkill -9 -f "Chrome for Testing"` and start over. `agent-browser close` will hang; don't wait on it.
-- **Screenshot paths must be absolute.** A relative path silently lands in `~/.agent-browser/tmp/screenshots/` instead.
-- **A page with an `<img>` on it wedges `screenshot` and `eval`.** Once an image element starts loading (gallery tiles, session thumbnails, the finish print, `upload` of the fixture), `Page.captureScreenshot` returns `Internal error` and `Runtime.evaluate` times out; the images sit at `complete: false` forever even though the endpoint serves them fine over curl. Reproduced on unmodified `main`, so it is the harness, not the app. Screenshot only image-free surfaces (the board is a canvas, and a fresh session's home has no gallery); verify image-bearing states through `eval` on the DOM before the first screenshot attempt wedges the daemon.
+1. Use the isolated stack below for development. For an authorized production check, follow [production.md](production.md) instead of starting or resetting a local stack.
+2. With OpenClaw, call browser `status`, then `start` if needed, and `open` the target URL. Use its current tool schema for interactions. Confirm a snapshot and screenshot work before testing the board. If unavailable or a required interaction is unsupported, report the limitation and use the fallback.
+3. With `agent-browser`, load `agent-browser skills get core` first. The CLI recipes below describe the fallback; run the same UI flow with OpenClaw when selected.
+
+## Fallback harness notes
+
+- **Check the host before using repo browser flags.** `agent-browser.json` sets `--use-angle=metal` for macOS. Use an appropriate backend on Linux; the OpenClaw-managed browser does not inherit this file. Earlier macOS runs deadlocked with SwiftShader on the board's antialiased canvas. Test the actual board before claiming rendering support.
+- **Recover only the browser owned by this test.** If its daemon wedges, identify its session/process before stopping it; shared browser processes may belong to other work.
+- **Use absolute screenshot paths.** Relative CLI paths may land in `~/.agent-browser/tmp/screenshots/`.
+- **Check image loading separately from capture.** Earlier CLI runs hit screenshot/evaluation failures on pages with loading `<img>` elements. Inspect image completion and network errors before retrying; do not treat that historical harness issue as a blanket ban on image-page screenshots.
 
 ## Stack lifecycle
 
@@ -82,17 +88,19 @@ A drag that survives `mouse up` (piece stays where dropped in the next screensho
 
 ## Multiplayer / sync checks
 
-Separate browser sessions are separate users (own localStorage identity, own WS):
+Separate browser sessions provide separate WebSocket connections. Account identity follows [TESTING.md's authenticated-account guidance](../../../TESTING.md#authenticated-accounts), not localStorage. With the isolated stack, this is a same-account cross-session sync check:
 
 ```bash
 AGENT_BROWSER_SESSION=p2 agent-browser open "http://localhost:3100/room/$ROOM"
 ```
 
-Then assert session p2 sees session 1's moves (screenshot) and both names in the progress panel. Close extras with `AGENT_BROWSER_SESSION=p2 agent-browser close`.
+Then assert session p2 sees session 1's moves (screenshot). A distinct-player check needs two separately authenticated accounts; two tabs sharing cookies do not establish it. Close extras with `AGENT_BROWSER_SESSION=p2 agent-browser close`.
 
 ## Cleanup
 
 ```bash
-agent-browser close --all
+agent-browser close
 scripts/e2e-env.sh stop
 ```
+
+For OpenClaw, close only this test's tabs. Stop the local stack only if this run started it. Production cleanup follows the production recipe.
