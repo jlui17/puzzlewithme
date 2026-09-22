@@ -1,3 +1,4 @@
+import { applyVariety, VARIETY_SEED_PREFIX } from "./variety.js";
 import {
   CELL_SIZE,
   PUZZLE_SALT,
@@ -40,14 +41,17 @@ interface InternalEdge {
  * random tab direction and jitter; the two pieces sharing an edge reference the
  * identical curve, so their shared boundary is an exact complement (see path.ts).
  *
- * The RNG is consumed in a fixed order (all vertical edges row-major, then all
- * horizontal edges) so client and server draw identical values.
+ * Legacy edges consume the RNG vertically then horizontally, in row-major
+ * order. Version-prefixed seeds then replace those curves with the variety
+ * generator; unprefixed saved rooms retain their exact original geometry.
  */
 export function generatePuzzle(rows: number, cols: number, seed: string | number): Puzzle {
   if (rows < 1 || cols < 1) {
     throw new Error("generatePuzzle: rows and cols must be >= 1");
   }
-  const rng = createRng(seed, PUZZLE_SALT);
+  const varied = typeof seed === "string" && seed.startsWith(VARIETY_SEED_PREFIX);
+  const baseSeed = varied ? (seed as string).slice(VARIETY_SEED_PREFIX.length) : seed;
+  const rng = createRng(baseSeed, PUZZLE_SALT);
 
   const drawEdge = (orientation: "horizontal" | "vertical", from: Vec2): InternalEdge => {
     const sign: 1 | -1 = rng.bool() ? 1 : -1;
@@ -125,7 +129,8 @@ export function generatePuzzle(rows: number, cols: number, seed: string | number
     }
   }
 
-  return { rows, cols, pieces };
+  const puzzle = { rows, cols, pieces };
+  return varied ? applyVariety(puzzle, String(baseSeed)) : puzzle;
 }
 
 /**

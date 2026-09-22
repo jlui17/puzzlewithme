@@ -154,6 +154,7 @@ describe("http handler", () => {
     expect(loaded?.settings.rows).toBe(expectedGrid.rows);
     expect(loaded?.settings.cols).toBe(expectedGrid.cols);
     expect(loaded?.settings.status).toBe("active");
+    expect(loaded?.settings.seed).toMatch(/^shape2:\d+$/);
 
     const getRes = await fetch(`${baseUrl}/api/rooms/${created.roomId}`);
     expect(getRes.status).toBe(200);
@@ -333,6 +334,7 @@ describe("http handler", () => {
       // The room references the gallery image, and both routes serve the same bytes.
       const { settings } = await json(await fetch(`${baseUrl}/api/rooms/${roomId}`));
       expect(settings.imageRef).toBe(imageId);
+      expect(settings.seed).toMatch(/^shape2:\d+$/);
       const viaRoom = Buffer.from(await (await fetch(`${baseUrl}/api/rooms/${roomId}/image`)).arrayBuffer());
       const standaloneRes = await fetch(`${baseUrl}/api/images/${imageId}`);
       expect(standaloneRes.status).toBe(200);
@@ -370,6 +372,7 @@ describe("http handler", () => {
       // The new room shares the image and lists in the creator's session history.
       const { settings } = await json(await fetch(`${baseUrl}/api/rooms/${created.roomId}`));
       expect(settings.imageRef).toBe(imageId);
+      expect(settings.seed).toMatch(/^shape2:\d+$/);
       expect((await fetch(`${baseUrl}/api/rooms/${created.roomId}/image`)).status).toBe(200);
       const { rooms } = await json(await fetch(`${baseUrl}/api/users/gallery-reuser/rooms`));
       expect(rooms.find((r: { roomId: string }) => r.roomId === created.roomId)).toMatchObject({

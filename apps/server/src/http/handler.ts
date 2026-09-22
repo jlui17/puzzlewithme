@@ -2,7 +2,7 @@ import { recordMembershipWithRetry } from "../store/record-membership.js";
 import { AuthenticationError, rejectAuthentication, type Authenticator } from "../auth/identity.js";
 import { randomBytes, randomInt } from "node:crypto";
 import type { IncomingMessage, RequestListener, ServerResponse } from "node:http";
-import { MAX_PIECE_COUNT, MIN_PIECE_COUNT } from "@puzzlewithme/geometry";
+import { MAX_PIECE_COUNT, MIN_PIECE_COUNT, VARIETY_SEED_PREFIX } from "@puzzlewithme/geometry";
 import {
   MAX_NAME_LENGTH,
   MAX_ROOM_NAME_LENGTH,
@@ -85,10 +85,10 @@ function generateId(): string {
  * Geometry only needs a 32-bit integer seed (see hashSeed); this isn't a
  * security boundary (FR-5's unguessability comes from roomId), just the
  * puzzle's determinism input, so 32 bits of randomness is plenty. Stored as
- * a decimal string because RoomSettings.seed is typed string.
+ * a version-prefixed decimal string so existing rooms retain their original cuts.
  */
 function generateSeed(): string {
-  return String(randomInt(2 ** 32));
+  return VARIETY_SEED_PREFIX + String(randomInt(2 ** 32));
 }
 
 /** One piece-count rule for both create paths (upload and from-gallery). */

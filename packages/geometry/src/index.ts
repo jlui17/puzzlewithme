@@ -67,3 +67,5 @@ export {
 export { initialScatter, matBounds, playArea, scatterBounds, type Bounds } from "./scatter.js";
 
 export { clampGroupToBoard, evaluateSnap } from "./snap.js";
+
+export { VARIETY_SEED_PREFIX } from "./variety.js";
