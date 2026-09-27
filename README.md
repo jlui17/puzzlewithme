@@ -74,3 +74,7 @@ Without the flag, the browser uses `/api/images/<imageRef>` as before for galler
 and now also for the board. The old room-image API remains available.
 
 See [DEPLOY.md](./DEPLOY.md#r2-photo-cutover) for migration and activation order.
+
+## Browser verification
+
+Use the [verification skill](.claude/skills/verify/SKILL.md) for local browser checks and authorized production smoke tests. Its [production guide](.claude/skills/verify/production.md) covers the shared agent inbox, Cloudflare login, and test-owned gameplay.
