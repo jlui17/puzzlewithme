@@ -18,15 +18,15 @@ function useThemeId(): string {
 }
 
 /**
- * One button that steps to the next light. It shows where it will take you
- * rather than where you are, so the glyph and the label say the same thing —
- * which matters in the phone tray, where the label is dropped. Cycles rather
- * than flips, so a third light would need no change here.
+ * One button that steps to the next light. Its label names where it will take
+ * you, not where you are. Cycles rather than flips, so a third light would
+ * need no change here.
  */
 export function ThemeSwitch({ className }: { className?: string }) {
-  const active = useThemeId();
-  const next = THEMES[(THEMES.findIndex((t) => t.id === active) + 1) % THEMES.length]!;
-  const label = `Switch to ${next.label.toLowerCase()}`;
+  const activeId = useThemeId();
+  const activeIndex = THEMES.findIndex((t) => t.id === activeId);
+  const next = THEMES[(activeIndex + 1) % THEMES.length]!;
+  const label = THEMES[activeIndex]!.switchLabel;
   return (
     <button
       type="button"
@@ -34,8 +34,7 @@ export function ThemeSwitch({ className }: { className?: string }) {
       aria-label={label}
       onClick={() => applyTheme(next.id)}
     >
-      <span aria-hidden="true">{next.emoji}</span>{" "}
-      <span className="theme-switch-label">{label}</span>
+      {label}
     </button>
   );
 }

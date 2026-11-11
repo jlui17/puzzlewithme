@@ -4,8 +4,8 @@
  * `:root[data-theme=...]` blocks in globals.css; theme.test.ts pins the
  * pairing (every theme id here has a CSS block with the full var set).
  *
- * The Pixi app runs with a transparent background — the walnut table behind it
- * is a CSS layer (.table in globals.css), so no canvas color lives here.
+ * The Pixi app runs with a transparent background — the table behind it is a
+ * CSS layer, so no canvas color lives here.
  */
 
 /**
@@ -63,61 +63,25 @@ export interface PropPalette {
 
 export interface Theme {
   id: string;
-  /** Toggle label, e.g. "Day". */
+  /** Name of this light, e.g. "Rainy evening". */
   label: string;
-  /** One glyph for the segmented day/night control. */
-  emoji: string;
+  /** Label of the control that leaves this light for the next one, e.g. "Switch to morning". */
+  switchLabel: string;
   board: BoardTheme;
   wood: WoodPalette;
   props: PropPalette;
 }
 
 /*
- * Two lights on one café table: daylight and lamplight. Mat and stroke mirror
- * the linen-mat colors the design draws on the walnut (globals.css .table),
- * a step lighter than the wood so the play area reads as cloth on furniture.
+ * Two lights at the window seat: a rainy evening (the default, listed first so
+ * it is also the fallback) and an overcast morning. The board, wood and props
+ * values are the previous day/night palettes carried over under the new ids.
  */
 export const THEMES: readonly Theme[] = [
   {
-    id: "day",
-    label: "Day",
-    emoji: "☀",
-    board: {
-      mat: 0xdccaa4,
-      matAlpha: 1,
-      weave: { shadow: "rgba(150,124,84,0.16)", highlight: "rgba(255,247,230,0.18)" },
-      stitch: 0x78603c,
-      frameStroke: 0x5a4426,
-      cursorLabelText: 0xfff8ef,
-    },
-    wood: {
-      base: 0x5a3821,
-      band: 0x6b4527,
-      dark: "rgba(34,18,7,0.48)",
-      light: "rgba(214,163,106,0.16)",
-      knot: 0x231205,
-      knotRing: 0x4b2d16,
-      check: 0x1a0c03,
-    },
-    props: {
-      notebook: 0x8e4536,
-      notebookEdge: 0x66301f,
-      pages: 0xeaddc7,
-      band: 0x2f190b,
-      pen: 0x1e2836,
-      penHighlight: 0x3a4759,
-      brass: 0xcfa860,
-      pods: 0xf3ede4,
-      podsShade: 0xb8ac9d,
-      coffee: 0x6a4527,
-      crema: 0xd6a870,
-      porcelain: 0xefe3d0,
-    },
-  },
-  {
-    id: "night",
-    label: "Night",
-    emoji: "☾",
+    id: "evening",
+    label: "Rainy evening",
+    switchLabel: "Switch to morning",
     board: {
       mat: 0x8e7d5f,
       matAlpha: 1,
@@ -150,17 +114,57 @@ export const THEMES: readonly Theme[] = [
       porcelain: 0xc9b89e,
     },
   },
+  {
+    id: "morning",
+    label: "Overcast morning",
+    switchLabel: "Switch to evening",
+    board: {
+      mat: 0xdccaa4,
+      matAlpha: 1,
+      weave: { shadow: "rgba(150,124,84,0.16)", highlight: "rgba(255,247,230,0.18)" },
+      stitch: 0x78603c,
+      frameStroke: 0x5a4426,
+      cursorLabelText: 0xfff8ef,
+    },
+    wood: {
+      base: 0x5a3821,
+      band: 0x6b4527,
+      dark: "rgba(34,18,7,0.48)",
+      light: "rgba(214,163,106,0.16)",
+      knot: 0x231205,
+      knotRing: 0x4b2d16,
+      check: 0x1a0c03,
+    },
+    props: {
+      notebook: 0x8e4536,
+      notebookEdge: 0x66301f,
+      pages: 0xeaddc7,
+      band: 0x2f190b,
+      pen: 0x1e2836,
+      penHighlight: 0x3a4759,
+      brass: 0xcfa860,
+      pods: 0xf3ede4,
+      podsShade: 0xb8ac9d,
+      coffee: 0x6a4527,
+      crema: 0xd6a870,
+      porcelain: 0xefe3d0,
+    },
+  },
 ];
 
-export const DEFAULT_THEME_ID = "day";
+export const DEFAULT_THEME_ID = "evening";
 
 /** Also referenced verbatim by the no-flash inline script in app/layout.tsx. */
 export const THEME_STORAGE_KEY = "pwm-theme";
 
 const THEME_EVENT = "pwm-theme-change";
 
+/** Ids stored before the rename; layout.tsx's no-flash script maps the same pairs. */
+const LEGACY_THEME_IDS: Record<string, string> = { day: "morning", night: "evening" };
+
 export function getTheme(id: string | null): Theme {
-  return THEMES.find((t) => t.id === id) ?? THEMES[0]!;
+  const current = id === null ? null : (LEGACY_THEME_IDS[id] ?? id);
+  return THEMES.find((t) => t.id === current) ?? THEMES[0]!;
 }
 
 /** The active theme, from the DOM attribute the no-flash script / applyTheme set. */
