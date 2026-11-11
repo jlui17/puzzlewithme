@@ -106,7 +106,8 @@ export function Table({
     const refit = () => void fit();
     window.addEventListener("resize", refit);
     const observer = new ResizeObserver(refit);
-    if (growWithContent) observer.observe(contentRef.current!);
+    // The content box stretches to the plane, so it only ever grows; its children follow their content both ways.
+    if (growWithContent) for (const child of contentRef.current!.children) observer.observe(child);
     return () => {
       window.removeEventListener("resize", refit);
       observer.disconnect();

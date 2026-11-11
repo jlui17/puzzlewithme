@@ -34,6 +34,28 @@ describe("sizeTable", () => {
     expect(tall.viewHeight).toBeGreaterThan(base.space);
   });
 
+  // The near edge's magnification, as the browser draws the plane.
+  const nearScale = (size: { tiltDeg: number; planeHeight: number }): number =>
+    base.perspective / (base.perspective - size.planeHeight * Math.sin((size.tiltDeg * Math.PI) / 180));
+
+  it.each([2000, 4000, 20000])("flattens a home plane %ipx deep so its near edge is magnified no more than at the fit", (content) => {
+    const home = { ...base, growWithContent: true };
+    const atFit = sizeTable(home);
+    const tall = sizeTable({ ...home, content });
+    expect(tall.planeHeight).toBe(content);
+    expect(tall.tiltDeg).toBeGreaterThan(0);
+    expect(tall.tiltDeg).toBeLessThan(28);
+    expect(nearScale(tall)).toBeCloseTo(nearScale(atFit), 9);
+    // The view is set, and taller than the screen, so the page scrolls.
+    expect(Number.isFinite(tall.viewHeight)).toBe(true);
+    expect(tall.viewHeight).toBeGreaterThan(base.space);
+  });
+
+  it("flattens a longer home plane more", () => {
+    const home = { ...base, growWithContent: true };
+    expect(sizeTable({ ...home, content: 4000 }).tiltDeg).toBeLessThan(sizeTable({ ...home, content: 2000 }).tiltDeg);
+  });
+
   it("lies flat and fills the space when the tilt is 0", () => {
     expect(sizeTable({ ...base, tiltDeg: 0 })).toEqual({ tiltDeg: 0, planeHeight: base.space, viewHeight: base.space });
   });

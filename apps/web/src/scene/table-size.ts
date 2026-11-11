@@ -17,6 +17,11 @@ export interface TableSize {
  * at the bottom of the screen. With `growWithContent` (the home) the plane is
  * at least that deep and grows with its content, and the page scrolls to the
  * near edge; otherwise (the room) it is exactly that deep.
+ *
+ * A plane deeper than the fit would bring its near edge closer to the viewer,
+ * magnified wider than the screen, so it tilts less instead: just enough that
+ * its near edge comes no closer than the fitted plane's. The longer the page,
+ * the flatter the table.
  */
 export function sizeTable({
   space,
@@ -44,7 +49,10 @@ export function sizeTable({
   }
   const fit = fitPlaneHeight(available, tiltDeg, perspective);
   const planeHeight = growWithContent ? Math.max(content, fit) : fit;
-  const a = (tiltDeg * Math.PI) / 180;
+  // The near edge is magnified by P / (P − depth · sin tilt); a deeper plane keeps depth · sin tilt at the fit's.
+  const tilt =
+    planeHeight > fit ? (Math.asin((fit * Math.sin((tiltDeg * Math.PI) / 180)) / planeHeight) * 180) / Math.PI : tiltDeg;
+  const a = (tilt * Math.PI) / 180;
   const projected = (planeHeight * Math.cos(a) * perspective) / (perspective - planeHeight * Math.sin(a));
-  return { tiltDeg, planeHeight, viewHeight: projected + edge };
+  return { tiltDeg: tilt, planeHeight, viewHeight: projected + edge };
 }
