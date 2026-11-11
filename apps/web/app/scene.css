@@ -1,8 +1,8 @@
 /*
  * The window seat every screen sits in (src/scene/): a window band on top,
  * the sill with the lamp, a strip of wall, and the table below, one tilted
- * plane in the lamp's pool of light. The phone breakpoint (760px) must match
- * PHONE_QUERY in src/scene/Table.tsx.
+ * plane in the lamp's pool of light. The phone layout, for narrow or short
+ * screens, uses the condition in PHONE_QUERY in src/scene/Table.tsx; keep them equal.
  */
 
 .scene {
@@ -309,7 +309,7 @@
 }
 
 /* ---------- Phone ---------- */
-@media (max-width: 760px) {
+@media (max-width: 760px), (max-height: 520px) {
   .scene { --lamp-x: 82%; }
   .window { height: 210px; }
   .scene[data-screen="room"] .window { height: 64px; }

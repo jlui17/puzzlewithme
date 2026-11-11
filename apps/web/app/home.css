@@ -1,6 +1,6 @@
 /*
  * The home page (app/page.tsx), lying on the table at HOME_TILT_DEG. Ported
- * from the mock's #screen-home. The phone breakpoint (760px) matches scene.css.
+ * from the mock's #screen-home. The phone layout (narrow or short screens) uses scene.css's condition.
  */
 
 .scene[data-screen="home"] .table-inner {
@@ -317,7 +317,7 @@
 .print-delete:focus-visible, .row-rename:focus-visible { border-radius: 50%; }
 .row-main:focus-visible { border-radius: 10px; }
 
-@media (max-width: 760px) {
+@media (max-width: 760px), (max-height: 520px) {
   .scene[data-screen="home"] .table-inner { grid-template-columns: minmax(0, 1fr); gap: 40px; padding-block: 44px 24px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
   .section-title { font-size: 26px; }
   .prints { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px 14px; }

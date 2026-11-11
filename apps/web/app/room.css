@@ -3,7 +3,7 @@
  * it (zoom, menu, who's here, connection badge), the overlays, and the card
  * for every state with no board. Colour never tells players apart on its own:
  * a player's colour always sits under their initial or next to their name.
- * The phone breakpoint (760px) matches scene.css.
+ * The phone layout (narrow or short screens) uses scene.css's condition.
  */
 
 /* ---------- The header, on the plane ---------- */
@@ -259,7 +259,7 @@
 }
 
 /* ---------- Phone ---------- */
-@media (max-width: 760px) {
+@media (max-width: 760px), (max-height: 520px) {
   .room-top { grid-template-columns: 1fr auto; grid-template-areas: "leave cups" "title me"; padding-left: 16px; padding-right: 16px; gap: 4px 12px; padding-top: 10px; align-items: end; }
   .leave { grid-area: leave; align-self: start; }
   .room-title { grid-area: title; text-align: left; }

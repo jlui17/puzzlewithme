@@ -17,8 +17,8 @@ import { sizeTable } from "./table-size";
 export const HOME_TILT_DEG = 28;
 export const ROOM_TILT_DEG = 12;
 
-/** scene.css's phone breakpoint: there the table lies flat, full width, with no floor or edge. */
-const PHONE_QUERY = "(max-width: 760px)";
+/** scene.css's phone condition, narrow or short screens: there the table lies flat, full width, with no floor or edge. */
+const PHONE_QUERY = "(max-width: 760px), (max-height: 520px)";
 
 /**
  * The table every screen sits on: a plane tilted about its far edge, seen
