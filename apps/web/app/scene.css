@@ -9,6 +9,8 @@
   position: relative;
   min-height: 100%;
   box-sizing: border-box;
+  /* The lamp's glow spills past the sides; unclipped, a phone widens its layout viewport to show it and the fixed menu falls off screen. */
+  overflow-x: clip;
   display: flex;
   flex-direction: column;
 }
