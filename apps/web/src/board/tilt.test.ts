@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clientToPlane, fitPlaneHeight, planeToView, viewToPlane, type TiltView } from "./tilt";
+import { clientToPlane, fitPlaneHeight, planeToClient, planeToView, viewToPlane, type TiltView } from "./tilt";
 
 const view: TiltView = {
   perspective: 1700,
@@ -50,7 +50,7 @@ describe("tilt projection", () => {
     expect(h).toBeLessThan(880);
   });
 
-  it("clientToPlane finds the view from the box of a canvas at the plane's top-left, and round-trips", () => {
+  it("clientToPlane finds the view from the box of a canvas at the plane's top-left, and planeToClient round-trips it", () => {
     // The view sits off the page origin, and a canvas 1285 x 850 lies on the plane.
     const offset = { x: 37.25, y: 96.5 };
     const canvas = { width: 1285, height: 850 };
@@ -78,6 +78,9 @@ describe("tilt projection", () => {
         const back = clientToPlane(t, box, canvas.height, drawn.x + offset.x, drawn.y + offset.y);
         expect(back.x).toBeCloseTo(u!, 6);
         expect(back.y).toBeCloseTo(v!, 6);
+        const client = planeToClient(t, box, canvas.height, u!, v!);
+        expect(client.x).toBeCloseTo(drawn.x + offset.x, 6);
+        expect(client.y).toBeCloseTo(drawn.y + offset.y, 6);
       }
     }
   });

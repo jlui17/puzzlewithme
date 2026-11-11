@@ -62,6 +62,20 @@ export function clientToPlane(
   return viewToPlane(t, clientX - viewLeft, clientY - viewTop);
 }
 
+/** A point on the plane back to a client point: the inverse of clientToPlane, from the same box and height. */
+export function planeToClient(
+  t: TiltView,
+  box: { left: number; top: number },
+  height: number,
+  u: number,
+  v: number,
+): { x: number; y: number } {
+  const viewLeft = box.left - planeToView(t, 0, height).x;
+  const viewTop = box.top - t.planeTop;
+  const drawn = planeToView(t, u, v);
+  return { x: drawn.x + viewLeft, y: drawn.y + viewTop };
+}
+
 /**
  * Plane height whose projected near edge lands `available` px below the
  * plane's top, for a plane whose top sits on the perspective origin's row.

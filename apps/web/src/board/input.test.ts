@@ -107,6 +107,9 @@ class FakePlacement {
   toCanvas(clientX: number, clientY: number): { x: number; y: number } {
     return viewToPlane(this.view, clientX, clientY);
   }
+  toClient(x: number, y: number): { x: number; y: number } {
+    return planeToView(this.view, x, y);
+  }
   tiltFor(scale: number): void {
     this.view = { ...this.view, tiltDeg: this.tiltAt(scale) };
   }
@@ -338,6 +341,23 @@ describe("zoomBy", () => {
     const steps = h.renderer.cameraLog.length;
     h.ticker.step(16);
     expect(h.renderer.cameraLog).toHaveLength(steps);
+  });
+
+  it("holds the middle of the visible board still on screen while the tilt flattens", () => {
+    h.placement.tiltAt = (scale) => tiltForScale(scale, 1, 12);
+    h.placement.tiltFor(h.renderer.camera.scale);
+    // The world point drawn at the middle of the visible board, and where it shows on screen.
+    const anchor = h.placement.toClient(400, 300);
+    const world = screenToWorld(h.renderer.camera, 400, 300);
+    controller.zoomBy(1.25);
+    for (let ms = 0; ms < 350; ms += 50) {
+      h.ticker.step(50);
+      const canvas = worldToScreen(h.renderer.camera, world.x, world.y);
+      const drawn = planeToView(h.placement.view, canvas.x, canvas.y);
+      expect(drawn.x).toBeCloseTo(anchor.x, 6);
+      expect(drawn.y).toBeCloseTo(anchor.y, 6);
+    }
+    expect(h.placement.view.tiltDeg).toBeLessThan(12);
   });
 
   it("a second press during the ease aims past the first one's target", () => {

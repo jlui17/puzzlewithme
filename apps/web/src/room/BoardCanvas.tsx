@@ -10,7 +10,7 @@ import { fitCamera, tiltForScale, type Camera } from "../board/camera";
 import { buildPiecePolygons } from "../board/hit-test";
 import { InputController, type CanvasPlacement } from "../board/input";
 import { BoardRenderer } from "../board/renderer";
-import { clientToPlane } from "../board/tilt";
+import { clientToPlane, planeToClient } from "../board/tilt";
 import { imageUrl } from "../config";
 import { ROOM_TILT_DEG } from "../scene/Table";
 import type { TableHandle } from "../scene/table-handle";
@@ -121,6 +121,7 @@ export function BoardCanvas({
         let fitScale = 1;
         const placement: CanvasPlacement = {
           toCanvas: (x, y) => clientToPlane(tilt, pixi.canvas.getBoundingClientRect(), pixi.screen.height, x, y),
+          toClient: (x, y) => planeToClient(tilt, pixi.canvas.getBoundingClientRect(), pixi.screen.height, x, y),
           tiltFor: (scale) => {
             tilt = tableHandle.setTilt(tiltForScale(scale, fitScale, restingTilt));
             onZoomRef.current?.(scale / fitScale);

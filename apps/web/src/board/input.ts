@@ -15,6 +15,8 @@ const ZOOM_BY_MS = 350;
 export interface CanvasPlacement {
   /** A client (viewport) point to canvas pixels. */
   toCanvas(clientX: number, clientY: number): { x: number; y: number };
+  /** Canvas pixels to a client point, through the tilt drawn right now. */
+  toClient(x: number, y: number): { x: number; y: number };
   /** Tilts the Table to suit camera scale `scale`. Call it before setting a camera with that scale. */
   tiltFor(scale: number): void;
   /** The part of the canvas the player sees: the tilted Table clips the canvas's bottom. */
@@ -39,7 +41,7 @@ export class InputController {
   private panning = false;
   private panLast = { x: 0, y: 0 };
   private pinch: { dist: number; midX: number; midY: number } | null = null;
-  private zoomTween: { from: number; to: number; elapsedMs: number } | null = null;
+  private zoomTween: { from: number; to: number; elapsedMs: number; anchor: { x: number; y: number } } | null = null;
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -83,12 +85,16 @@ export class InputController {
       this.puzzle.cols,
       this.placement.viewport(),
     );
+    // The middle of the visible board as a client point, held still through
+    // the whole ease as the wheel holds the pointer, while the tilt changes under it.
+    const vp = this.placement.viewport();
+    const anchor = this.zoomTween?.anchor ?? this.placement.toClient(vp.width / 2, vp.height / 2);
     if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
       this.zoomTween = null;
-      this.zoomAtCentre(to);
+      this.zoomTo(to, anchor, anchor);
       return;
     }
-    this.zoomTween = { from, to, elapsedMs: 0 };
+    this.zoomTween = { from, to, elapsedMs: 0, anchor };
   }
 
   private readonly tick = (ticker: Ticker): void => {
@@ -98,17 +104,9 @@ export class InputController {
     const t = Math.min(1, tween.elapsedMs / ZOOM_BY_MS);
     const eased = 1 - (1 - t) ** 3;
     // Geometric, so the zoom feels even the way the wheel's exponential steps do.
-    this.zoomAtCentre(tween.from * (tween.to / tween.from) ** eased);
+    this.zoomTo(tween.from * (tween.to / tween.from) ** eased, tween.anchor, tween.anchor);
     if (t === 1) this.zoomTween = null;
   };
-
-  private zoomAtCentre(scale: number): void {
-    const vp = this.placement.viewport();
-    const centre = { x: vp.width / 2, y: vp.height / 2 };
-    const cam = this.renderer.camera;
-    this.placement.tiltFor(scale);
-    this.renderer.setCamera(zoomAt(cam, scale, centre, centre));
-  }
 
   /**
    * Sets the camera to `scale`, moving the world point under client point
