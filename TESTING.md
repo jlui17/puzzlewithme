@@ -23,7 +23,7 @@ A bug should fail in the lowest layer that can express it. Before writing a test
 | Store durability semantics | the `RoomStore` contract suite | `store/contract.test-suite.ts` |
 | WS wiring, join handshake, fan-out policy | in-process integration | `net/ws-integration.test.ts`, `net/registry.test.ts` |
 | HTTP routing/multipart | `http/handler.test.ts` | |
-| Camera math, hit-testing, gesture arbitration | `apps/web/src/board` unit tests | `camera.test.ts`, `hit-test.test.ts`, `input.test.ts` |
+| Camera math, table tilt projection, hit-testing, gesture arbitration | `apps/web/src/board` unit tests | `camera.test.ts`, `tilt.test.ts`, `hit-test.test.ts`, `input.test.ts` |
 | A seam only visible with everything wired | the one full-stack smoke | `apps/server/src/e2e.test.ts` |
 | Rendering, input feel, atlas on a real GPU | browser check (on demand) | `.claude/skills/verify` |
 
@@ -43,8 +43,9 @@ A bug should fail in the lowest layer that can express it. Before writing a test
 
 ## Deliberately untested
 
-- **`renderer.ts`** (the Pixi scene itself: sprites, atlas bake, weave/hem drawing) has no unit coverage; the browser check owns it. Its DOM-free neighbors are tested: `camera.ts` and `hit-test.ts` are pure modules with colocated tests, and `input.ts`'s gesture arbitration runs against fakes of its canvas/renderer/sync seams (`input.test.ts`). When logic grows inside the renderer, extract it into a DOM-free module and test it there, the same way `sync/` was carved out of the client.
-- **React room components** (`apps/web/src/room`): thin composition over the tested sync layer; covered by the browser check only.
+- **`renderer.ts`** (the Pixi scene itself: sprites, the atlas bake with its shadows, side faces and edges, the picture outline, cursors, the completed glow) has no unit coverage; the browser check owns it. Of `atlas.ts` only the tile-clamping math is tested. Its DOM-free neighbors are tested: `camera.ts`, `hit-test.ts`, `tilt.ts` (the tilted table's projection and its inverse for pointer input) and `shadow.ts` are pure modules with colocated tests, and `input.ts`'s gesture arbitration runs against fakes of its canvas/renderer/sync seams (`input.test.ts`). When logic grows inside the renderer, extract it into a DOM-free module and test it there, the same way `sync/` was carved out of the client.
+- **React room components** (`apps/web/src/room`) and the home page (`apps/web/app/page.tsx`): thin composition over the tested sync layer; covered by the browser check only.
+- **The Window Seat scene and the tilted table** (`apps/web/src/scene`, `apps/web/app/*.css`): only `table-size.ts` (the plane's sizing math) has a unit test. `Table.tsx` (the CSS 3D plane, its sizing effect, the flat phone layout), the window, sill, lamp and cup components, `window-art.ts` and all the CSS are covered by the browser check only. That the browser's own transform agrees with `tilt.ts`'s inverse is likewise a browser check, not a CI one. `theme.test.ts` pins only that each theme has its CSS block and the same variables, not what they look like.
 - **The S3 image-store round-trip** is gated on `S3_BUCKET` (`s3-image-store.integration.test.ts`); the default run unit-tests `S3ImageStore` against a fake client. The gated suite overwrites one fixed object key because its IAM credentials have no delete permission.
 
 ## Conventions

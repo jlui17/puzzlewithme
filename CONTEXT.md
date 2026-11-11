@@ -6,15 +6,11 @@ server holding authoritative room state over WebSockets, and shared geometry.
 ## Language
 
 **Theme**:
-A named look for the whole café scene — board colors, wood, prop colors, and a
-matching CSS block in globals.css. The sole palette home; `night: boolean` is
-not a theme selector.
-_Avoid_: palette (for the whole look), skin, mode
-
-**WorldLayer**:
-A themed layer of the board's camera viewport (the table slab, the props) with
-a uniform shape, so a theme change swaps any layer the same way.
-_Avoid_: prop layer, decoration
+One of the window seat's two lights: "Rainy evening" (`evening`, the default)
+or "Overcast morning" (`morning`). Each is a Pixi board palette in theme.ts and
+a matching `[data-theme]` CSS block in globals.css; these are the sole palette
+home. The id is not a boolean: there is no `night`/`day` flag.
+_Avoid_: palette (for the whole look), skin, mode, day/night
 
 **Reconciliation**:
 The plan for one server message — which board mutations apply, what the local
@@ -40,9 +36,9 @@ What the next puzzle is made from: a fresh upload or an already-uploaded
 gallery image. One value; the two picks are mutually exclusive by type.
 _Avoid_: file + galleryPick (as separate state)
 
-**Mat**:
-The linen cloth the puzzle is laid out on, drawn over the table.
-
 **Table**:
-The walnut café table under everything. Exists twice on purpose: a CSS backdrop
-behind the transparent canvas and a Pixi slab inside the board world.
+The wooden plane every screen sits on, tilted about its far edge under a
+perspective view. It is CSS only (`Table`): the board's transparent Pixi canvas
+lies on it and tilts with it, and the board drives the tilt through a
+`TableHandle`. Nothing in the board draws a table.
+_Avoid_: slab, world layer

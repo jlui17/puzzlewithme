@@ -190,6 +190,6 @@ Accounts and cross-device identity; piece rotation; chat (cursors and presence c
 | Board model | Fully shared; no per-player state |
 | Scoring | In-room per-player placed counts; credit-once-at-first-connection rule (FR-21) |
 | Rotation | None in v1 |
-| Visual direction | A café table: walnut surface, a linen mat the puzzle is worked on, day and night themes; tanggle.io as inspiration, intuitiveness over imitation |
+| Visual direction | A café window seat: a tilted wooden table with the pieces on bare wood, lit as a rainy evening or an overcast morning; tanggle.io as inspiration, intuitiveness over imitation |
 | Host privileges | None after creation; settings immutable |
 | Post-completion | Room permanently read-only; replay = new room |

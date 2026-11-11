@@ -27,10 +27,13 @@ This is the browser tier of the repo's test strategy (TESTING.md): the only cove
 ```bash
 scripts/e2e-env.sh start            # web :3100, server :3101 — isolated from dev's 3000/3001
 scripts/e2e-env.sh start --fresh    # same, after wiping rooms and uploads
+WEB_PORT=3170 SERVER_PORT=3171 scripts/e2e-env.sh start --fresh   # other ports, for a second stack alongside
 scripts/e2e-env.sh stop
 scripts/e2e-env.sh status
 scripts/e2e-env.sh reset            # stop, then wipe
 ```
+
+`WEB_PORT` and `SERVER_PORT` come from the environment (defaults 3100 and 3101), and the pid files under `.e2e/` belong to the checkout, so give each checkout its own pair of ports when several stacks run side by side. Pass the same variables to `stop`, `status` and `reset`; `stop` also kills whatever still listens on those two ports.
 
 State lives in gitignored `.e2e/data` (SQLite db + uploads) and survives a stop/start, so rooms and gallery images from an earlier run are still there when you come back. Nothing touches the real dev DB or S3 either way. Use `--fresh` when leftovers would confuse the check — anything reading the home gallery or a room list — or when you want to prove first-run behavior. The web compile is isolated too, via `NEXT_DIST_DIR=.next-e2e`: `NEXT_PUBLIC_SERVER_URL` is inlined at compile time, so a shared `.next` would hand dev's browsers a bundle pointed at this stack's server, where none of dev's rooms exist. Logs: `.e2e/server.log`, `.e2e/web.log`. `start` warms the `/` and `/room/[id]` dev compiles so the browser never waits on them.
 
@@ -48,8 +51,8 @@ bun scripts/make-test-image.mjs         # writes .e2e/fixture.png
 agent-browser open http://localhost:3100
 agent-browser wait --text "PuzzleWithMe"
 agent-browser upload 'input[type=file]' .e2e/fixture.png   # the file input is hidden; CSS selector works anyway
-agent-browser wait --text "Closest clean fit"   # the slip's step-02 note, which only appears once the picked image has been measured
-agent-browser find role button click --name "Brew this puzzle →"
+agent-browser wait --text "across"   # the piece-count note under the slider ("Exactly N, laid out X across…" or "Closest clean fit…"), which only appears once the picked image has been measured
+agent-browser find role button click --name "Start the puzzle"
 agent-browser wait --url "**/room/**"
 sleep 5    # board boot: image fetch + atlas build + WS join; no DOM signal marks it done
 agent-browser screenshot /abs/path/board.png
@@ -80,8 +83,10 @@ agent-browser mouse up
 ```
 
 DOM-verifiable signals (these ARE in `snapshot` / `wait --text`):
-- Brew slip (top left): `N of M pieces placed`. Players card (top right, "At the table"): display names and per-player counts.
-- Tray buttons: `See the picture`, `Hide who's here`, `Switch to night` (the theme switch names the light it will change to, so it reads `Switch to day` once it's night), `Head out`.
+- Room header (top of the table): `N of M pieces placed` (`All M pieces placed` once finished), the `Leave the table` link, and one cup per player with a `N placed` count.
+- Room menu (bottom pill): `See the picture`, `Who's here` (its text also shows the player count), `Who did what` (only once finished), the theme switch, and `Leave the table`. The theme switch is named for the light you are in and where it goes next: `Rainy evening now. Switch to morning.`, and `Overcast morning now. Switch to evening.` once switched.
+- The players panel is closed until `Who's here` is pressed; it then lists display names and per-player counts under `N at the table`.
+- A room that is still connecting or offline shows a small badge (`pulling up a chair…`, `finding the table again…`, `you slipped offline`, `full house`).
 - Append `?debug=1` to the room URL for the sync-diagnostics overlay (message counts per type).
 
 A drag that survives `mouse up` (piece stays where dropped in the next screenshot) proves the full grab→move→drop round trip through the server, not just local rendering.
