@@ -68,12 +68,16 @@
 .chrome { position: absolute; inset: 0; z-index: 5; pointer-events: none; }
 .chrome > * { pointer-events: auto; }
 
-.zoom-ctl {
+/* The bottom-right corner: the zoom buttons, and Who's here beside them when it is open. */
+.corner {
   position: absolute;
   right: max(24px, env(safe-area-inset-right, 0px));
   bottom: 84px;
-  display: flex; flex-direction: column; gap: 6px;
+  display: flex; align-items: flex-end; gap: 12px;
+  pointer-events: none;
 }
+.corner > * { pointer-events: auto; }
+.zoom-ctl { display: flex; flex-direction: column; gap: 6px; }
 .zoom-btn {
   width: 36px; height: 36px;
   border-radius: 50%;
@@ -115,9 +119,7 @@
 
 /* Who's here */
 .players {
-  position: absolute;
-  right: max(24px, env(safe-area-inset-right, 0px));
-  bottom: 84px;
+  position: relative;
   width: 300px;
   box-sizing: border-box;
   padding: 16px 18px 14px;
@@ -275,14 +277,15 @@
   .my-cup { position: relative; left: auto; bottom: auto; grid-area: me; justify-self: end; align-self: end; gap: 8px; padding-bottom: 2px; }
   .my-cup .cup { width: 40px; height: 40px; }
   .my-cup .cup-label { font-size: 12px; text-align: right; }
-  .zoom-ctl { right: 16px; bottom: 76px; flex-direction: row; }
+  .corner { position: fixed; left: max(16px, env(safe-area-inset-left, 0px)); right: max(16px, env(safe-area-inset-right, 0px)); bottom: calc(72px + env(safe-area-inset-bottom, 0px)); flex-direction: column; gap: 10px; }
+  .zoom-ctl { flex-direction: row; }
   .zoom-hint { display: none; }
   .room-menu { position: fixed; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); left: max(16px, env(safe-area-inset-left, 0px)); right: max(16px, env(safe-area-inset-right, 0px)); transform: none; max-width: none; justify-content: space-between; padding: 4px; }
   .menu-btn { padding: 8px 10px; gap: 0; }
   .menu-btn span { display: none; }
   .menu-btn svg { width: 20px; height: 20px; }
   .menu-sep { display: none; }
-  .players { position: fixed; right: max(16px, env(safe-area-inset-right, 0px)); left: max(16px, env(safe-area-inset-left, 0px)); width: auto; bottom: calc(72px + env(safe-area-inset-bottom, 0px)); }
+  .players { align-self: stretch; width: auto; }
   .conn-badge { top: calc(64px + 30px + 150px); }
   .finish-card { padding: 22px 20px 20px; }
   .finish-card h2 { font-size: 34px; }

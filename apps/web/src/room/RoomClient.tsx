@@ -288,7 +288,19 @@ function RoomLive({ settings }: { settings: RoomSettings }) {
       {/* Flat over the table, never tilted: outside the plane, because fixed positions break inside its transform. */}
       <div className="chrome">
         <ConnectionBadge status={panel.connection} />
-        <ZoomControl zoomRef={zoomRef} hintRef={zoomHintRef} />
+        {/* Who's here opens beside the zoom buttons (above them on a phone), so it never covers them. */}
+        <div className="corner">
+          <ZoomControl zoomRef={zoomRef} hintRef={zoomHintRef} />
+          {playersOpen && (
+            <PlayersPanel
+              players={panel.players}
+              localGuestId={panel.localGuestId}
+              placed={panel.placed}
+              onRename={onRename}
+              onClose={closePlayers}
+            />
+          )}
+        </div>
         <RoomMenu
           imageUrl={imageUrl(settings.imageRef)}
           playerCount={panel.players.length}
@@ -297,15 +309,6 @@ function RoomLive({ settings }: { settings: RoomSettings }) {
           completed={completed}
           onShowStats={() => setStatsDismissed(false)}
         />
-        {playersOpen && (
-          <PlayersPanel
-            players={panel.players}
-            localGuestId={panel.localGuestId}
-            placed={panel.placed}
-            onRename={onRename}
-            onClose={closePlayers}
-          />
-        )}
       </div>
 
       {completed && !statsDismissed && (
