@@ -103,7 +103,7 @@ describe("evaluateSnap: locked groups are immovable", () => {
 });
 
 describe("evaluateSnap: bounds clamp", () => {
-  it("clamps a drop beyond the mat's hem (FR-15)", () => {
+  it("clamps a drop beyond the play area (FR-15)", () => {
     const groups = [group("g0", [0], 0, 0)];
     const out = snap(groups, "g0", 5000, 5000);
     const bounds = playArea(ROWS, COLS);

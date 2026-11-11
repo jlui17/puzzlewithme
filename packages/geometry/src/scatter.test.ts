@@ -48,7 +48,7 @@ describe("playArea", () => {
     expect(bandMany).toBeGreaterThan(bandFew * 2);
   });
 
-  it("sits inside the mat, which carries the hem around it", () => {
+  it("sits inside the mat, which adds a margin around it", () => {
     const p = playArea(8, 10);
     const m = matBounds(8, 10);
     expect(m.minX).toBeLessThan(p.minX);
@@ -72,7 +72,7 @@ describe("initialScatter", () => {
 
   it("hugs the frame instead of filling the surface", () => {
     // The nearest-cells pool is what keeps a puzzle workable on a phone: pieces
-    // ring the frame, and the cloth's far corners stay empty to sort into.
+    // ring the frame, and the play area's far corners stay empty to sort into.
     const area = playArea(ROWS, COLS);
     const frameW = COLS * CELL_SIZE;
     const frameH = ROWS * CELL_SIZE;

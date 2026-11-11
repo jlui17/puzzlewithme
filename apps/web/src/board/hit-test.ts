@@ -78,6 +78,27 @@ export function buildPiecePolygons(puzzle: Puzzle): Map<number, Vec2[]> {
   return map;
 }
 
+/**
+ * How a group is drawn: its container's position, the pivot it scales about
+ * and its scale. A group another player holds is drawn raised and larger
+ * than where it is stored.
+ */
+export interface GroupPlacement {
+  x: number;
+  y: number;
+  pivotX: number;
+  pivotY: number;
+  scale: number;
+}
+
+/** A world point in a group's own frame (its anchor piece's cell origin at 0,0), through the placement it is drawn with. */
+export function worldToGroup(placement: GroupPlacement, wx: number, wy: number): Vec2 {
+  return {
+    x: (wx - placement.x) / placement.scale + placement.pivotX,
+    y: (wy - placement.y) / placement.scale + placement.pivotY,
+  };
+}
+
 /** Standard even-odd ray-cast point-in-polygon test. */
 export function pointInPolygon(poly: Vec2[], x: number, y: number): boolean {
   let inside = false;

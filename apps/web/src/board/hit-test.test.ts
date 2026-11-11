@@ -1,6 +1,6 @@
 import { CELL_SIZE, coordToPieceId, generatePuzzle, type Vec2 } from "@puzzlewithme/geometry";
 import { describe, expect, it } from "vitest";
-import { buildPiecePolygons, pointInPolygon } from "./hit-test";
+import { buildPiecePolygons, pointInPolygon, worldToGroup } from "./hit-test";
 
 describe("pointInPolygon", () => {
   const square: Vec2[] = [
@@ -29,6 +29,44 @@ describe("pointInPolygon", () => {
     expect(pointInPolygon(ell, 7, 2)).toBe(false); // in the notch, inside the box
     expect(pointInPolygon(ell, 7, 7)).toBe(true);
     expect(pointInPolygon(ell, 2, 2)).toBe(true);
+  });
+});
+
+describe("worldToGroup", () => {
+  // A one-piece group stored with its cell at (600..700, 450..550), held by another
+  // player: drawn about its centre at 1.08x and raised 25 units, as the renderer does.
+  const centre = { x: CELL_SIZE / 2, y: CELL_SIZE / 2 };
+  const lifted = { x: 600 + centre.x, y: 450 + centre.y - 25, pivotX: centre.x, pivotY: centre.y, scale: 1.08 };
+  const square: Vec2[] = [
+    { x: 0, y: 0 },
+    { x: CELL_SIZE, y: 0 },
+    { x: CELL_SIZE, y: CELL_SIZE },
+    { x: 0, y: CELL_SIZE },
+  ];
+  const hits = (wx: number, wy: number): boolean => {
+    const p = worldToGroup(lifted, wx, wy);
+    return pointInPolygon(square, p.x, p.y);
+  };
+
+  it("inverts the transform the group is drawn with", () => {
+    const local = { x: 12, y: 87 };
+    const wx = (local.x - lifted.pivotX) * lifted.scale + lifted.x;
+    const wy = (local.y - lifted.pivotY) * lifted.scale + lifted.y;
+    const back = worldToGroup(lifted, wx, wy);
+    expect(back.x).toBeCloseTo(local.x, 9);
+    expect(back.y).toBeCloseTo(local.y, 9);
+  });
+
+  it("hits a lifted piece where it is drawn, not where it is stored", () => {
+    // Drawn from y 421 to 529: the top shows above the stored cell, and the stored cell's bottom is bare.
+    expect(hits(615, 430)).toBe(true);
+    expect(hits(615, 540)).toBe(false);
+    expect(hits(650, 475)).toBe(true);
+  });
+
+  it("matches the stored cell for a group drawn where it is stored", () => {
+    const resting = { x: 650, y: 500, pivotX: centre.x, pivotY: centre.y, scale: 1 };
+    expect(worldToGroup(resting, 615, 540)).toEqual({ x: 15, y: 90 });
   });
 });
 

@@ -35,9 +35,9 @@ function areGridAdjacent(a: number, b: number, cols: number): boolean {
 
 /**
  * Clamp a group's anchor position so its whole footprint (cells plus tab
- * overhang) stays within the play area — the mat inside its stitched hem
- * (FR-15). A drop beyond an edge lands the group against that edge, so a piece
- * can be put down anywhere on the cloth but never past the dashed line.
+ * overhang) stays within the play area (FR-15). A drop beyond an edge lands
+ * the group against that edge, so a piece can be put down anywhere on the
+ * table but never past the play area's edge.
  */
 export function clampGroupToBoard(
   position: Vec2,

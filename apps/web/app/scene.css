@@ -1,0 +1,361 @@
+/*
+ * The window seat every screen sits in (src/scene/): a window band on top,
+ * the sill with the lamp, a strip of wall, and the table below, one tilted
+ * plane in the lamp's pool of light. The phone layout, for narrow or short
+ * screens, uses the condition in PHONE_QUERY in src/scene/Table.tsx; keep them equal.
+ */
+
+.scene {
+  position: relative;
+  min-height: 100%;
+  box-sizing: border-box;
+  /* The lamp's glow spills past the sides; unclipped, a phone widens its layout viewport to show it and the fixed menu falls off screen. */
+  overflow-x: clip;
+  display: flex;
+  flex-direction: column;
+}
+
+.scene-shapes {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+
+/* ---------- The window ---------- */
+.window {
+  position: relative;
+  height: clamp(190px, 30vh, 320px);
+  overflow: hidden;
+  background: linear-gradient(180deg, var(--sky-top) 0%, var(--sky-mid) 55%, var(--sky-bot) 100%);
+}
+.scene[data-screen="room"] .window { height: clamp(48px, 6vh, 64px); }
+.window > * { position: absolute; inset: 0; }
+.street { width: 100%; height: 100%; }
+.street .building { fill: var(--street); }
+.street .lit { fill: var(--win-lit); filter: blur(.6px); }
+.street .wet { opacity: var(--bokeh); }
+.bokeh { pointer-events: none; }
+.bk {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(7px);
+  opacity: var(--bokeh);
+  transition: opacity .4s;
+}
+.rain { width: 100%; height: 100%; pointer-events: none; }
+.rain line { stroke: var(--rain); stroke-linecap: round; }
+.rain g { animation: fall linear infinite; }
+.rain .r1 { animation-duration: 6.5s; }
+.rain .r2 { animation-duration: 9s; }
+.rain .r3 { animation-duration: 12.5s; }
+@keyframes fall { from { transform: translateY(0); } to { transform: translateY(400px); } }
+.rain.is-paused { opacity: 0; transition: opacity 1.2s; }
+.drops { width: 100%; height: 100%; pointer-events: none; }
+.drops ellipse { fill: var(--drop); }
+.fog {
+  background:
+    radial-gradient(60% 70% at 0% 100%, var(--fog), transparent 70%),
+    radial-gradient(50% 60% at 100% 100%, var(--fog), transparent 70%),
+    linear-gradient(180deg, transparent 50%, var(--fog) 100%);
+  pointer-events: none;
+}
+.lamp-halo {
+  left: var(--lamp-x); top: auto; bottom: -40px;
+  width: 520px; height: 300px;
+  transform: translateX(-50%);
+  background: radial-gradient(ellipse 50% 60% at 50% 70%, var(--lamp-glow), transparent 70%);
+  opacity: .8;
+  pointer-events: none;
+}
+.scene[data-screen="room"] .lamp-halo { width: 300px; height: 140px; }
+.mullion {
+  left: 61%; width: 22px; right: auto;
+  background: linear-gradient(90deg, #0a0806, #221a14 45%, #0a0806);
+  box-shadow: 0 0 24px rgba(0,0,0,.6);
+}
+:root[data-theme="morning"] .mullion { background: linear-gradient(90deg, #4a4038, #6b5d52 45%, #3d342d); }
+
+/* The title, finger-written in the fogged glass. */
+.fog-title {
+  position: absolute;
+  left: max(28px, env(safe-area-inset-left, 0px));
+  top: 14%;
+  inset-inline-end: auto; bottom: auto;
+  margin: 0;
+  font-family: var(--fhand);
+  font-weight: 700;
+  font-size: clamp(44px, 5.6vw, 84px);
+  line-height: 1;
+  letter-spacing: .01em;
+  color: var(--glass-ink);
+  text-shadow: 0 0 14px var(--glass-glow), 0 0 2px var(--glass-glow);
+  transform: rotate(-2.5deg);
+  transform-origin: left center;
+  user-select: none;
+  pointer-events: none;
+}
+.scene[data-screen="room"] .fog-title { font-size: clamp(22px, 2.2vw, 28px); top: 22%; }
+.fog-title .drip {
+  position: absolute;
+  left: 2.6em; top: .72em;
+  width: .035em; height: .55em;
+  border-radius: 0 0 1em 1em;
+  background: linear-gradient(180deg, var(--glass-ink), transparent);
+  opacity: .8;
+}
+.fog-title small {
+  display: block;
+  font-family: var(--fserif);
+  font-style: italic;
+  font-weight: 400;
+  font-size: .27em;
+  letter-spacing: 0;
+  margin-top: .22em;
+  color: var(--glass-ink);
+  text-shadow: 0 0 8px var(--glass-glow);
+}
+.scene[data-screen="room"] .fog-title small { display: none; }
+
+/* ---------- The sill: a ledge with a lit top surface and a front edge; the lamp stands on the top surface ---------- */
+.sill {
+  position: relative;
+  height: 38px;
+  --sill-front-h: 14px;
+  z-index: 3;
+}
+.sill::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 var(--sill-front-h) 0;
+  background:
+    radial-gradient(ellipse 300px 44px at var(--lamp-x) 100%, var(--lamp-glow), transparent 70%),
+    linear-gradient(180deg, var(--sill-top-hi), var(--sill-top));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.12);
+}
+.sill::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: var(--sill-front-h);
+  background: linear-gradient(180deg, var(--sill-front-hi), var(--sill-front));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.06), 0 6px 14px rgba(0,0,0,.45);
+}
+.scene[data-screen="room"] .sill { height: 28px; --sill-front-h: 10px; }
+/* The strip of wall between the sill and the table's far edge. */
+.wall { position: relative; height: 16px; background: var(--wall); z-index: 2; box-shadow: inset 0 -1px 0 rgba(0,0,0,.4); }
+.scene[data-screen="room"] .wall { height: 10px; }
+
+.lamp {
+  position: absolute;
+  left: var(--lamp-x);
+  bottom: 9px;
+  transform: translateX(-50%);
+  width: 150px; height: 178px;
+  z-index: 4;
+  display: block;
+  cursor: pointer;
+}
+.scene[data-screen="room"] .lamp { width: 62px; height: 74px; }
+.lamp svg { width: 100%; height: 100%; overflow: visible; display: block; }
+.lamp-reflection {
+  left: calc(var(--lamp-x) + 44px); top: auto; right: auto; bottom: -9px;
+  width: 150px; height: 178px;
+  transform: translateX(-50%);
+  opacity: var(--reflection);
+  filter: blur(1.2px);
+  pointer-events: none;
+}
+.lamp-reflection svg { width: 100%; height: 100%; overflow: visible; display: block; }
+.scene[data-screen="room"] .lamp-reflection { width: 62px; height: 74px; left: calc(var(--lamp-x) + 20px); }
+.plant {
+  position: absolute;
+  left: 71%;
+  bottom: 10px;
+  width: 50px; height: 58px;
+  z-index: 4;
+  pointer-events: none;
+}
+.plant svg { width: 100%; height: 100%; overflow: visible; display: block; }
+.scene[data-screen="room"] .plant { width: 28px; height: 32px; }
+.lamp-glow {
+  position: absolute;
+  left: var(--lamp-x); bottom: -220px;
+  width: 1100px; height: 700px;
+  transform: translateX(-50%);
+  background: radial-gradient(ellipse 50% 50% at 50% 30%, var(--lamp-glow), transparent 65%);
+  pointer-events: none;
+  z-index: 2;
+  animation: flicker 9s ease-in-out infinite;
+  transition: opacity .4s;
+}
+.scene[data-screen="room"] .lamp-glow { width: 900px; height: 400px; bottom: -120px; }
+@keyframes flicker {
+  0%, 100% { opacity: 1; }
+  43% { opacity: .96; }
+  47% { opacity: 1; }
+  71% { opacity: .92; }
+  74% { opacity: 1; }
+}
+.light-label {
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  transform: translateX(-50%);
+  margin-top: 34px;
+  display: inline-flex;
+  gap: 10px;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--ink-2);
+  z-index: 4;
+}
+.scene[data-screen="room"] .light-label { display: none; }
+.light-label b { font-weight: 500; color: var(--ink); }
+.light-label i { font-style: normal; opacity: .6; }
+
+/* ---------- The table: one tilted plane ---------- */
+/* The plane is rotated about its far edge (under the wall) and seen from the seat: the perspective origin sits at
+   the window, so the far edge keeps its width and the near part comes toward you. Everything that lies on the table
+   is a child of the plane; things that stand up counter-rotate. Table.tsx sets --cam and the heights. */
+.table-view {
+  position: relative;
+  flex: none;
+  min-height: 0;
+  perspective: var(--persp);
+  perspective-origin: 50% 0%;
+  overflow: hidden;
+}
+/* The café floor: a second plane under the table, seen beside it. */
+.floor {
+  position: absolute;
+  left: -25%; width: 150%;
+  top: 0; height: 260%;
+  transform-origin: 50% 0%;
+  transform: rotateX(var(--cam)) translateZ(-240px);
+  pointer-events: none;
+  background:
+    repeating-linear-gradient(90deg, rgba(0,0,0,.5) 0 2px, transparent 2px 96px),
+    repeating-linear-gradient(90deg, rgba(255,255,255,.02) 0 96px, transparent 96px 192px),
+    repeating-linear-gradient(91deg, rgba(0,0,0,.12) 0 2px, transparent 2px 19px),
+    linear-gradient(180deg, var(--floor-wood-1), var(--floor-wood-2));
+}
+.table3d {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: var(--table-w);
+  margin: 0 auto;
+  border-radius: 0 0 var(--corner) var(--corner);
+  transform-style: preserve-3d;
+  transform-origin: 50% 0%;
+  transform: rotateX(var(--cam));
+  --pool-layers:
+    radial-gradient(ellipse 60% 420px at var(--lamp-x) 0%, var(--pool), transparent 70%),
+    radial-gradient(ellipse 18% 160px at var(--lamp-x) 0%, var(--pool-core), transparent 70%);
+  --grain:
+    repeating-linear-gradient(calc(var(--grain-dir) + 1deg), rgba(255,255,255,calc(.035 * var(--grain-k))) 0 1px, transparent 1px 7px),
+    repeating-linear-gradient(calc(var(--grain-dir) - .6deg), rgba(0,0,0,calc(.14 * var(--grain-k))) 0 2px, transparent 2px 15px),
+    repeating-linear-gradient(calc(var(--grain-dir) + .6deg), rgba(0,0,0,calc(.08 * var(--grain-k))) 0 3px, transparent 3px 41px);
+  background:
+    var(--pool-layers),
+    repeating-linear-gradient(var(--plank-dir), transparent 0 calc(var(--plank) - 2px), var(--seam) calc(var(--plank) - 2px) calc(var(--plank) - 1px), var(--seam-hi) calc(var(--plank) - 1px) var(--plank)),
+    repeating-linear-gradient(var(--plank-dir), rgba(255,255,255,.025) 0 var(--plank), rgba(0,0,0,.09) var(--plank) calc(2 * var(--plank))),
+    var(--grain),
+    linear-gradient(var(--wood-tint), var(--wood-tint)),
+    linear-gradient(180deg, var(--wood-top), var(--wood) 70%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.12);
+}
+/* The room's pool is wider and sits under the whole play area, so loose pieces never fall into the dark. */
+.scene[data-screen="room"] .table3d {
+  --pool-layers:
+    radial-gradient(ellipse 58% 62% at 50% 50%, var(--pool-room), transparent 72%),
+    radial-gradient(ellipse 60% 300px at var(--lamp-x) 0%, var(--pool), transparent 70%);
+}
+/* The near edge: the thickness of the top, standing up from the plane's near side. */
+.table-edge {
+  position: absolute;
+  left: var(--corner); right: var(--corner); top: 100%;
+  height: var(--edge-h);
+  border-radius: 0 0 var(--corner) var(--corner);
+  transform-origin: 50% 0%;
+  transform: rotateX(calc(-1 * var(--cam)));
+  background: linear-gradient(var(--wood-tint), var(--wood-tint)), linear-gradient(180deg, rgba(255,240,220,.28) 0 2px, rgba(255,240,220,.1) 2px 4px, var(--apron) 4px 45%, var(--apron-dark));
+}
+.screen { flex: 1; display: flex; flex-direction: column; position: relative; z-index: 1; transform-style: preserve-3d; }
+
+/* ---------- Things that stand on the table face the camera ---------- */
+.stand { transform-style: preserve-3d; }
+.stand > .cup { transform-origin: 50% 100%; transform: rotateX(calc(-1 * var(--cam))); }
+.cup { position: relative; width: 56px; height: 56px; flex: none; }
+.cup svg { width: 100%; height: 100%; overflow: visible; display: block; }
+.steam { position: absolute; left: 50%; top: 32%; width: 0; height: 0; pointer-events: none; }
+.steam i {
+  position: absolute;
+  left: -6px; bottom: 0;
+  width: 12px; height: 34px;
+  border-radius: 50%;
+  background: radial-gradient(ellipse at 50% 60%, rgba(255,255,255,.55), transparent 70%);
+  filter: blur(2px);
+  opacity: 0;
+  animation: rise 4.8s ease-in-out infinite;
+}
+.steam i:nth-child(2) { left: -14px; animation-delay: 1.4s; }
+.steam i:nth-child(3) { left: 2px; animation-delay: 2.9s; }
+@keyframes rise {
+  0% { transform: translateY(0) scaleX(1); opacity: 0; }
+  25% { opacity: .55; }
+  100% { transform: translateY(-46px) scaleX(1.8) rotate(6deg); opacity: 0; }
+}
+
+/* ---------- Phone ---------- */
+@media (max-width: 760px), (max-height: 520px) {
+  .scene { --lamp-x: 82%; }
+  .window { height: 210px; }
+  .scene[data-screen="room"] .window { height: 64px; }
+  .fog-title { font-size: 46px; top: 16%; }
+  .scene[data-screen="room"] .fog-title { font-size: 26px; top: 28%; }
+  .lamp { width: 104px; height: 124px; bottom: 8px; }
+  .scene[data-screen="room"] .lamp { width: 62px; height: 74px; }
+  .lamp-reflection { width: 104px; height: 124px; left: calc(var(--lamp-x) + 30px); }
+  .scene[data-screen="room"] .lamp-reflection { left: calc(var(--lamp-x) + 18px); }
+  .plant { left: 8%; width: 36px; height: 42px; }
+  .scene[data-screen="room"] .plant { width: 24px; height: 28px; }
+  .sill { height: 30px; --sill-front-h: 10px; }
+  .scene[data-screen="room"] .sill { height: 22px; --sill-front-h: 8px; }
+  .wall { height: 10px; }
+  .scene[data-screen="room"] .wall { height: 8px; }
+  .lamp-glow { left: auto; right: -260px; transform: none; width: 760px; height: 520px; bottom: -180px; }
+  .scene[data-screen="room"] .lamp-glow { right: -240px; width: 600px; height: 400px; bottom: -120px; }
+  .light-label { left: auto; right: 0; transform: none; }
+  .table3d { --pool-layers: radial-gradient(ellipse 90% 380px at var(--lamp-x) 0%, var(--pool), transparent 70%); }
+  .scene[data-screen="room"] .table3d { --pool-layers:
+    radial-gradient(ellipse 80% 50% at 50% 45%, var(--pool-room), transparent 72%),
+    radial-gradient(ellipse 90% 300px at var(--lamp-x) 0%, var(--pool), transparent 70%); }
+  /* The phone lies flat: no tilt, full-width table, no floor or edge, so the board stays a plain scroller. */
+  .table-view { flex: 1; display: flex; flex-direction: column; }
+  .table-edge, .floor { display: none; }
+  .table3d { flex: 1; width: 100%; border-radius: 0; transform: none; }
+  .stand > .cup { transform: none; }
+}
+
+/* ---------- Short screens (a phone held sideways): a thinner window, so the table keeps the height ---------- */
+@media (max-height: 520px) {
+  .window { height: 120px; }
+  .fog-title { font-size: 36px; }
+  .lamp, .lamp-reflection { width: 80px; height: 95px; }
+  /* The room's window is a strip: title on the glass, lamp and plant on a thin sill. */
+  .scene[data-screen="room"] .window { height: 32px; }
+  .scene[data-screen="room"] .fog-title { font-size: 16px; top: 26%; }
+  .scene[data-screen="room"] .sill { height: 18px; --sill-front-h: 7px; }
+  .scene[data-screen="room"] .wall { height: 6px; }
+  .scene[data-screen="room"] .lamp { width: 36px; height: 43px; bottom: 6px; }
+  .scene[data-screen="room"] .lamp-reflection { width: 36px; height: 43px; left: calc(var(--lamp-x) + 12px); }
+  .scene[data-screen="room"] .plant { width: 18px; height: 21px; bottom: 6px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rain g, .lamp-glow, .steam i { animation: none; }
+  .steam i { opacity: .35; transform: translateY(-14px) scaleX(1.4); }
+  .lamp-glow { transition: none; }
+}

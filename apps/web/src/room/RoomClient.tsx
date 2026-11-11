@@ -14,15 +14,21 @@ import {
 } from "../sync";
 import { getRoom } from "../api";
 import { imageUrl, wsUrl } from "../config";
-import { Cup, TableSurface } from "../table";
+import { Cup } from "../scene/Cup";
+import { Scene } from "../scene/Scene";
+import { Sill } from "../scene/Sill";
+import { ROOM_TILT_DEG, Table } from "../scene/Table";
+import type { TableHandle } from "../scene/table-handle";
+import { WindowBand } from "../scene/WindowBand";
 import { CompletionOverlay, type Contribution } from "./CompletionOverlay";
-import { BrewSlip, PlayersPanel, type PlayerView } from "./PlayersPanel";
+import { PlayersPanel, type PlayerView } from "./PlayersPanel";
+import { RoomHeader } from "./RoomHeader";
 import { RoomMenu } from "./RoomMenu";
+import { TableCard } from "./TableCard";
+import { ZoomControl } from "./ZoomControl";
 
+/** Stores "0" once the players panel was left open, so it opens again next visit; it starts closed. */
 const PANEL_COLLAPSED_KEY = "pwm:panelCollapsed";
-
-/** Below this, the players panel's default width covers too much of a phone-sized board. */
-const MOBILE_BREAKPOINT_PX = 640;
 
 const BoardCanvas = dynamic(() => import("./BoardCanvas").then((m) => m.BoardCanvas), {
   ssr: false,
@@ -56,6 +62,7 @@ function derivePanel(state: BoardState, total: number): Panel {
     .map((s) => {
       const id = state.players.get(s.guestId);
       return {
+        id: s.guestId,
         name: id?.name ?? "Guest",
         color: id?.color ?? "#9aa7b4",
         placedCount: s.placedCount,
@@ -79,7 +86,7 @@ function derivePanel(state: BoardState, total: number): Panel {
 /** Cheap change signature so 60 Hz cursor/motion notifies don't re-render panels. */
 function signature(p: Panel): string {
   const players = p.players.map((x) => `${x.id}:${x.name}:${x.color}:${x.placedCount}`).join("|");
-  const contrib = p.contributions.map((c) => `${c.name}:${c.placedCount}`).join("|");
+  const contrib = p.contributions.map((c) => `${c.id}:${c.name}:${c.placedCount}`).join("|");
   return `${p.connection}/${p.status}/${p.localGuestId}/${p.placed}/${p.total}/${p.hasCompletionTime}/${p.completionMs}/${players}/${contrib}`;
 }
 
@@ -101,81 +108,83 @@ export function RoomClient({ roomId }: { roomId: string }) {
 
   if (load.phase === "loading") {
     return (
-      <StateCard>
-        <Cup className="state-cup" />
-        <h2>Brewing your puzzle…</h2>
+      <StateScene>
+        <Cup color="var(--p4)" />
+        <h2>Setting the table…</h2>
         <p>Laying out the pieces and pulling up chairs.</p>
-      </StateCard>
+      </StateScene>
     );
   }
   if (load.phase === "not_found") {
     return (
-      <StateCard>
-        <div className="script">sorry —</div>
-        <h2>no such table</h2>
+      <StateScene>
+        <h2>No table here</h2>
         <p>That link&apos;s gone cold. The room isn&apos;t here any more.</p>
-        <a href="/" className="state-btn">
+        <a href="/" className="start-btn">
           Start a fresh one
         </a>
-      </StateCard>
+      </StateScene>
     );
   }
   if (load.phase === "error") {
     return (
-      <StateCard>
-        <div className="script">hm —</div>
-        <h2>the kitchen&apos;s quiet</h2>
+      <StateScene>
+        <h2>The table&apos;s out of reach</h2>
         <p>{load.message}</p>
-      </StateCard>
+      </StateScene>
     );
   }
 
   return <RoomLive settings={load.settings} />;
 }
 
-/** A slip left on an empty table: every non-playable room state renders here. */
-function StateCard({ children }: { children: ReactNode }) {
+/** The window seat with an empty table and a card on it: every room state with no board to play. */
+function StateScene({ children }: { children: ReactNode }) {
   return (
-    <div className="state-shell">
-      <TableSurface />
-      <div className="state-card">{children}</div>
-    </div>
+    <Scene screen="room">
+      <WindowBand />
+      <Sill />
+      <Table tilt={ROOM_TILT_DEG}>
+        <TableCard>{children}</TableCard>
+      </Table>
+    </Scene>
   );
 }
 
 function RoomLive({ settings }: { settings: RoomSettings }) {
   const totalPieces = settings.rows * settings.cols;
   const pointerRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const tableRef = useRef<TableHandle>(null);
+  const zoomRef = useRef<((factor: number) => void) | null>(null);
+  const zoomHintRef = useRef<HTMLSpanElement>(null);
   const [toast, setToast] = useState<{ name: string; x: number; y: number; key: number } | null>(
     null,
   );
   const [statsDismissed, setStatsDismissed] = useState(false);
 
-  // Lazy initializer: reads the saved choice, falling back to a width-based
-  // default. Runs during SSR too (no "use client" boundary exempts the
-  // initial render), so window/localStorage must be guarded.
-  const [playersCollapsed, setPlayersCollapsed] = useState<boolean>(() => {
-    if (typeof window === "undefined") return false;
+  // Lazy initializer: RoomLive renders only on the client (after the room
+  // GET), but storage can still throw (private mode/disabled).
+  const [playersOpen, setPlayersOpen] = useState<boolean>(() => {
     try {
-      const saved = localStorage.getItem(PANEL_COLLAPSED_KEY);
-      if (saved === "1") return true;
-      if (saved === "0") return false;
+      return localStorage.getItem(PANEL_COLLAPSED_KEY) === "0";
     } catch {
-      // Storage can throw (private mode/disabled); fall through to the width default.
+      return false;
     }
-    return window.innerWidth < MOBILE_BREAKPOINT_PX;
   });
 
-  const togglePlayersCollapsed = useCallback(() => {
-    setPlayersCollapsed((prev) => {
-      const next = !prev;
-      try {
-        localStorage.setItem(PANEL_COLLAPSED_KEY, next ? "1" : "0");
-      } catch {
-        // Best-effort persistence; a failed write just means the choice resets next visit.
-      }
-      return next;
-    });
+  const setPlayersOpenSaved = useCallback((open: boolean) => {
+    setPlayersOpen(open);
+    try {
+      localStorage.setItem(PANEL_COLLAPSED_KEY, open ? "0" : "1");
+    } catch {
+      // Best-effort persistence; a failed write just means the choice resets next visit.
+    }
+  }, []);
+  const togglePlayers = useCallback(() => setPlayersOpenSaved(!playersOpen), [playersOpen, setPlayersOpenSaved]);
+  const closePlayers = useCallback(() => setPlayersOpenSaved(false), [setPlayersOpenSaved]);
+
+  const onZoom = useCallback((zoom: number) => {
+    if (zoomHintRef.current) zoomHintRef.current.textContent = `${zoom.toFixed(1)}×`;
   }, []);
 
   // One SyncClient per room mount. Browser adapters only touch globals when
@@ -224,7 +233,7 @@ function RoomLive({ settings }: { settings: RoomSettings }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sync, totalPieces]);
 
-  // Auto-dismiss the held-by toast (CSS animation lasts ~1.8s).
+  // Auto-dismiss the held-by toast (CSS animation lasts 1.8s).
   useEffect(() => {
     if (!toast) return;
     const t = setTimeout(() => setToast(null), 1900);
@@ -232,69 +241,88 @@ function RoomLive({ settings }: { settings: RoomSettings }) {
   }, [toast]);
 
   const onRename = useCallback((name: string) => sync.rename(name), [sync]);
+  const closeStats = useCallback(() => setStatsDismissed(true), []);
 
   // Read-only from either source: the GET already told us the room is completed,
   // so honor it even before (or without) a WS snapshot flipping sync state.
   const completed = settings.status === "completed" || panel.status === "completed";
   const roomFull = panel.connection === "room_full";
+  const me = panel.players.find((p) => p.id === panel.localGuestId) ?? null;
+  const others = panel.players.filter((p) => p.id !== panel.localGuestId);
 
   if (roomFull) {
     return (
-      <StateCard>
-        <div className="script">oof —</div>
-        <h2>full house</h2>
+      <StateScene>
+        <h2>Full house</h2>
         <p>Every seat at this table is taken. Try again in a bit, or put your own puzzle on.</p>
-        <a href="/" className="state-btn">
+        <a href="/" className="start-btn">
           Start a fresh one
         </a>
-      </StateCard>
+      </StateScene>
     );
   }
 
   return (
-    <div className="room-shell">
-      <TableSurface />
-      <BoardCanvas sync={sync} settings={settings} interactive={!completed} pointerRef={pointerRef} />
-
-      <ConnectionBadge status={panel.connection} />
-
-      <BrewSlip placed={panel.placed} total={panel.total} />
-
-      {!playersCollapsed && (
-        <PlayersPanel
-          players={panel.players}
-          localGuestId={panel.localGuestId}
-          placed={panel.placed}
-          onRename={onRename}
+    <Scene screen="room">
+      <WindowBand rainPaused={completed} />
+      <Sill />
+      <Table ref={tableRef} tilt={ROOM_TILT_DEG}>
+        <BoardCanvas
+          sync={sync}
+          settings={settings}
+          interactive={!completed}
+          pointerRef={pointerRef}
+          table={tableRef}
+          zoomRef={zoomRef}
+          onZoom={onZoom}
         />
-      )}
+        {/* After the board, so it paints over it. */}
+        <RoomHeader placed={panel.placed} total={panel.total} completed={completed} others={others} me={me} />
+        {toast && (
+          <div className="held-toast" key={toast.key} style={{ left: toast.x, top: toast.y }} role="status">
+            {toast.name}&apos;s got that one
+          </div>
+        )}
+      </Table>
 
-      <RoomMenu
-        imageUrl={imageUrl(settings.imageRef)}
-        playersCollapsed={playersCollapsed}
-        onTogglePlayers={togglePlayersCollapsed}
-        completed={completed}
-        onShowStats={() => setStatsDismissed(false)}
-      />
-
-      {toast && (
-        <div className="held-toast" key={toast.key} style={{ left: toast.x, top: toast.y }}>
-          {toast.name}&apos;s got that one
+      {/* Flat over the table, never tilted: outside the plane, because fixed positions break inside its transform. */}
+      <div className="chrome">
+        <ConnectionBadge status={panel.connection} />
+        {/* Who's here opens beside the zoom buttons (above them on a phone), so it never covers them. */}
+        <div className="corner">
+          <ZoomControl zoomRef={zoomRef} hintRef={zoomHintRef} />
+          {playersOpen && (
+            <PlayersPanel
+              players={panel.players}
+              localGuestId={panel.localGuestId}
+              placed={panel.placed}
+              onRename={onRename}
+              onClose={closePlayers}
+            />
+          )}
         </div>
-      )}
+        <RoomMenu
+          imageUrl={imageUrl(settings.imageRef)}
+          playerCount={panel.players.length}
+          playersOpen={playersOpen}
+          onTogglePlayers={togglePlayers}
+          completed={completed}
+          onShowStats={() => setStatsDismissed(false)}
+        />
+      </div>
 
       {completed && !statsDismissed && (
         <CompletionOverlay
-          imageUrl={imageUrl(settings.imageRef)}
           elapsedMs={panel.hasCompletionTime ? panel.completionMs : null}
           total={panel.total || totalPieces}
           contributions={panel.contributions}
-          onClose={() => setStatsDismissed(true)}
+          localGuestId={panel.localGuestId}
+          onClose={closeStats}
         />
       )}
 
       <DebugOverlay sync={sync} />
-    </div>
+    </Scene>
   );
 }
 
@@ -378,8 +406,8 @@ function ConnectionBadge({ status }: { status: ConnectionStatus }) {
   // Hide the badge entirely once connected to keep the table clean.
   if (status === "connected") return null;
   return (
-    <div className="conn-badge">
-      <span className={`conn-dot ${dot}`} />
+    <div className="conn-badge" role="status">
+      <span className={`conn-dot ${dot}`} aria-hidden="true" />
       {label[status]}
     </div>
   );

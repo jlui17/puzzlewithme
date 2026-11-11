@@ -7,8 +7,9 @@
 #
 # Ports 3100/3101 mirror the dev pair 3000/3001 (+100) so the mapping is easy
 # to remember while never colliding with a dev stack someone left running.
-WEB_PORT=3100
-SERVER_PORT=3101
+# Set WEB_PORT / SERVER_PORT in the environment to run several stacks side by side.
+WEB_PORT=${WEB_PORT:-3100}
+SERVER_PORT=${SERVER_PORT:-3101}
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 # Runtime state (pids, logs, fixture, game state) lives in a gitignored dir so
