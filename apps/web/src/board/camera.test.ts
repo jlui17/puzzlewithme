@@ -111,6 +111,16 @@ describe("fitCamera", () => {
     expect(top - BOARD_FIT_HEADER_INSET_PX).toBeCloseTo(VP.height - BOARD_FIT_MENU_INSET_PX - bottom, 6);
   });
 
+  it("centers under a shorter header when the viewport names one, and fits larger", () => {
+    const short: Viewport = { width: 844, height: 296, headerInset: 38 };
+    const cam = fitCamera(ROWS, COLS, short);
+    const b = scatterBounds(ROWS, COLS);
+    const top = b.minY * cam.scale + cam.y;
+    const bottom = b.maxY * cam.scale + cam.y;
+    expect(top - 38).toBeCloseTo(short.height - BOARD_FIT_MENU_INSET_PX - bottom, 6);
+    expect(cam.scale).toBeGreaterThan(fitCamera(ROWS, COLS, { width: 844, height: 296 }).scale);
+  });
+
   it("yields a scale inside the clamp range", () => {
     const cam = fitCamera(ROWS, COLS, VP);
     expect(cam.scale).toBeGreaterThanOrEqual(minScale(ROWS, COLS, VP));

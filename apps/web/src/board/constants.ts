@@ -57,6 +57,13 @@ export const BOARD_FIT_MENU_INSET_PX = 66;
  * name and count lines), and its board starts 4px below it.
  */
 export const BOARD_FIT_HEADER_INSET_PX = 96;
+
+/**
+ * The same on a short screen (a phone held sideways), where room.css lays
+ * the header out in one row: 6px top padding + a 28px cup, and the same 4px
+ * the board starts below it.
+ */
+export const BOARD_FIT_SHORT_HEADER_INSET_PX = 38;
 /** A single cell fills this fraction of the smaller viewport dimension at max zoom. */
 export const MAX_ZOOM_CELL_FILL = 0.45;
 

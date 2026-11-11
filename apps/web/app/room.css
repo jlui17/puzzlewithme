@@ -291,6 +291,27 @@
   .finish-card h2 { font-size: 34px; }
 }
 
+/* ---------- Short screens (a phone held sideways): the header in one row, Who's here beside the zoom buttons ---------- */
+/* The header is 6px padding + a 28px cup tall here; BOARD_FIT_SHORT_HEADER_INSET_PX (constants.ts) is that plus a gap, and the board's fit clears it. */
+@media (max-height: 520px) {
+  .room-top { grid-template-columns: auto minmax(0, 1fr) auto auto; grid-template-areas: "leave title cups me"; align-items: center; padding-top: 6px; gap: 12px; }
+  .leave { padding: 0; align-self: center; }
+  .room-title { text-align: center; }
+  .prog { justify-content: center; flex-wrap: nowrap; margin-top: 0; }
+  .prog-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pan-hint { display: none; }
+  /* Small cups with no names: the names are in Who's here. */
+  .cups { flex-wrap: nowrap; gap: 6px; align-self: center; }
+  .cups li { width: auto; }
+  .cups .cup, .my-cup .cup { width: 28px; height: 28px; }
+  .cups .cup-name, .cups .cup-count, .my-cup .cup-label { display: none; }
+  .my-cup { align-self: center; padding-bottom: 0; }
+  .corner { left: auto; flex-direction: row; gap: 12px; }
+  /* Clear of the header: the window strip (56px) + the header (34px) + a gap, above the corner's 72px. */
+  .players { align-self: auto; width: 300px; max-height: calc(100vh - 168px - env(safe-area-inset-bottom, 0px)); overflow-y: auto; }
+  .conn-badge { top: 98px; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .held-toast { animation: none; }
   .conn-dot.reconnecting { animation: none; }

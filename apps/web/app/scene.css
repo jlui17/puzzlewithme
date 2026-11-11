@@ -339,6 +339,21 @@
   .stand > .cup { transform: none; }
 }
 
+/* ---------- Short screens (a phone held sideways): a thinner window, so the table keeps the height ---------- */
+@media (max-height: 520px) {
+  .window { height: 120px; }
+  .fog-title { font-size: 36px; }
+  .lamp, .lamp-reflection { width: 80px; height: 95px; }
+  /* The room's window is a strip: title on the glass, lamp and plant on a thin sill. */
+  .scene[data-screen="room"] .window { height: 32px; }
+  .scene[data-screen="room"] .fog-title { font-size: 16px; top: 26%; }
+  .scene[data-screen="room"] .sill { height: 18px; --sill-front-h: 7px; }
+  .scene[data-screen="room"] .wall { height: 6px; }
+  .scene[data-screen="room"] .lamp { width: 36px; height: 43px; bottom: 6px; }
+  .scene[data-screen="room"] .lamp-reflection { width: 36px; height: 43px; left: calc(var(--lamp-x) + 12px); }
+  .scene[data-screen="room"] .plant { width: 18px; height: 21px; bottom: 6px; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .rain g, .lamp-glow, .steam i { animation: none; }
   .steam i { opacity: .35; transform: translateY(-14px) scaleX(1.4); }

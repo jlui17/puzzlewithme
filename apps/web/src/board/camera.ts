@@ -26,6 +26,8 @@ export interface Camera {
 export interface Viewport {
   width: number;
   height: number;
+  /** Canvas pixels the room's header covers along the top; BOARD_FIT_HEADER_INSET_PX when absent. */
+  headerInset?: number;
 }
 
 export function worldToScreen(cam: Camera, wx: number, wy: number): { x: number; y: number } {
@@ -39,12 +41,16 @@ export function screenToWorld(cam: Camera, sx: number, sy: number): { x: number;
 /**
  * The area the mat is fit and centered in: the viewport minus the room header
  * along the top and the band the room menu occupies along the bottom. It
- * starts BOARD_FIT_HEADER_INSET_PX down. Panning still uses the full viewport,
- * so pieces can be dragged under the header or menu and back out — this only
+ * starts headerInset(vp) down. Panning still uses the full viewport, so
+ * pieces can be dragged under the header or menu and back out — this only
  * keeps the fit-to-screen view from placing pieces under them.
  */
 function fitBox(vp: Viewport): Viewport {
-  return { width: vp.width, height: Math.max(1, vp.height - BOARD_FIT_HEADER_INSET_PX - BOARD_FIT_MENU_INSET_PX) };
+  return { width: vp.width, height: Math.max(1, vp.height - headerInset(vp) - BOARD_FIT_MENU_INSET_PX) };
+}
+
+function headerInset(vp: Viewport): number {
+  return vp.headerInset ?? BOARD_FIT_HEADER_INSET_PX;
 }
 
 /**
@@ -127,7 +133,7 @@ export function fitCamera(rows: number, cols: number, vp: Viewport): Camera {
   const fit = Math.min(box.width / bw, box.height / bh) * MIN_ZOOM_BOARD_MARGIN;
   const scale = clampScale(fit > 0 ? fit : 0.01, rows, cols, vp);
   const x = (box.width - bw * scale) / 2 - b.minX * scale;
-  const y = BOARD_FIT_HEADER_INSET_PX + (box.height - bh * scale) / 2 - b.minY * scale;
+  const y = headerInset(vp) + (box.height - bh * scale) / 2 - b.minY * scale;
   return { x, y, scale };
 }
 

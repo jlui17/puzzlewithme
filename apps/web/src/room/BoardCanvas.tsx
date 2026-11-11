@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { Application } from "pixi.js";
 import { browserClock, type SyncClient } from "../sync";
 import { buildAtlases } from "../board/atlas";
+import { BOARD_FIT_SHORT_HEADER_INSET_PX } from "../board/constants";
 import { fitCamera, tiltForScale, type Camera } from "../board/camera";
 import { buildPiecePolygons } from "../board/hit-test";
 import { InputController, type CanvasPlacement } from "../board/input";
@@ -23,6 +24,9 @@ import { TableCard } from "./TableCard";
  * plane, so it clips the canvas at the plane's near edge.
  */
 const MOUNT_STYLE: React.CSSProperties = { position: "absolute", inset: 0, overflow: "hidden", touchAction: "none" };
+
+/** room.css's short-screen condition, where the header lies in one row. */
+const SHORT_QUERY = "(max-height: 520px)";
 
 /**
  * Client-only Pixi host. Bakes atlases, builds the renderer + input, and wires
@@ -129,7 +133,11 @@ export function BoardCanvas({
             visibleHeight = mount.clientHeight;
             board.visibleHeight = visibleHeight;
           },
-          viewport: () => ({ width: pixi.screen.width, height: visibleHeight }),
+          viewport: () => ({
+            width: pixi.screen.width,
+            height: visibleHeight,
+            ...(matchMedia(SHORT_QUERY).matches ? { headerInset: BOARD_FIT_SHORT_HEADER_INSET_PX } : {}),
+          }),
         };
         const applyCamera = (cam: Camera): void => {
           placement.tiltFor(cam.scale);
