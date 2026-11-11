@@ -29,7 +29,7 @@ import {
   MOCK_UNIT,
   PIECE_SIDE_DEPTH,
 } from "./constants";
-import { pointInPolygon } from "./hit-test";
+import { pointInPolygon, worldToGroup } from "./hit-test";
 import { shadowOffset } from "./shadow";
 import { currentTheme, type BoardTheme } from "../theme";
 
@@ -297,22 +297,35 @@ export class BoardRenderer {
    * Topmost group whose actual piece outline contains the world point. Iterates
    * containers back-to-front (render order top first) so a click resolves to the
    * piece drawn on top; the cheap cell-bbox reject runs before the polygon test.
+   * Tests each group where it is drawn (its container), so a piece another
+   * player holds is hit where it shows, raised and larger.
    */
   hitTest(wx: number, wy: number): { groupId: string; pieceId: number } | null {
     const state = this.getState();
     const cols = this.puzzle.cols;
     const children = this.groupLayer.children;
     for (let i = children.length - 1; i >= 0; i--) {
-      const id = children[i]!.label;
-      const group = state.groups.get(id);
+      const container = children[i]!;
+      const group = state.groups.get(container.label);
       if (!group) continue;
+      const local = worldToGroup(
+        {
+          x: container.position.x,
+          y: container.position.y,
+          pivotX: container.pivot.x,
+          pivotY: container.pivot.y,
+          scale: container.scale.x,
+        },
+        wx,
+        wy,
+      );
       const anchor = MIN_ID(group.pieces, cols);
       const anchorFrame = framePosition(anchor, cols);
       for (const p of group.pieces) {
         const pid = p.row * cols + p.col;
         const fp = framePosition(pid, cols);
-        const lx = wx - (group.position.x + fp.x - anchorFrame.x);
-        const ly = wy - (group.position.y + fp.y - anchorFrame.y);
+        const lx = local.x - (fp.x - anchorFrame.x);
+        const ly = local.y - (fp.y - anchorFrame.y);
         if (
           lx < -this.atlas.overhang ||
           ly < -this.atlas.overhang ||
@@ -322,7 +335,7 @@ export class BoardRenderer {
           continue;
         }
         const poly = this.polygons.get(pid);
-        if (poly && pointInPolygon(poly, lx, ly)) return { groupId: id, pieceId: pid };
+        if (poly && pointInPolygon(poly, lx, ly)) return { groupId: container.label, pieceId: pid };
       }
     }
     return null;
