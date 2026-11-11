@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fitPlaneHeight, planeToView, viewToPlane, type TiltView } from "./tilt";
+import { clientToPlane, fitPlaneHeight, planeToView, viewToPlane, type TiltView } from "./tilt";
 
 const view: TiltView = {
   perspective: 1700,
@@ -48,5 +48,43 @@ describe("tilt projection", () => {
     const near = planeToView(view, 0, h);
     expect(near.y).toBeCloseTo(880, 6);
     expect(h).toBeLessThan(880);
+  });
+
+  it("clientToPlane finds the view from the box of a canvas at the plane's top-left, and round-trips", () => {
+    // The view sits off the page origin, and a canvas 1285 x 850 lies on the plane.
+    const offset = { x: 37.25, y: 96.5 };
+    const canvas = { width: 1285, height: 850 };
+    for (const tiltDeg of [12, 5.3, 0]) {
+      const t = { ...view, tiltDeg };
+      // getBoundingClientRect of the drawn canvas: the box around its four projected corners.
+      const corners = [
+        [0, 0],
+        [canvas.width, 0],
+        [0, canvas.height],
+        [canvas.width, canvas.height],
+      ].map(([u, v]) => planeToView(t, u!, v!));
+      const box = {
+        left: Math.min(...corners.map((c) => c.x)) + offset.x,
+        top: Math.min(...corners.map((c) => c.y)) + offset.y,
+      };
+      for (const [u, v] of [
+        [0, 0],
+        [1285, 0],
+        [12, 840],
+        [1270, 790],
+        [640, 410],
+      ]) {
+        const drawn = planeToView(t, u!, v!);
+        const back = clientToPlane(t, box, canvas.height, drawn.x + offset.x, drawn.y + offset.y);
+        expect(back.x).toBeCloseTo(u!, 6);
+        expect(back.y).toBeCloseTo(v!, 6);
+      }
+    }
+  });
+
+  it("clientToPlane is the plain box offset when the plane lies flat", () => {
+    const back = clientToPlane({ ...view, tiltDeg: 0 }, { left: 150, top: 96 }, 850, 400, 300);
+    expect(back.x).toBeCloseTo(250, 9);
+    expect(back.y).toBeCloseTo(204, 9);
   });
 });

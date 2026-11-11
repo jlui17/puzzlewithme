@@ -137,6 +137,8 @@ export class BoardRenderer {
   /** Snapshot of the active theme's board colors; refreshTheme() re-reads it. */
   private theme: BoardTheme = currentTheme().board;
   camera: Camera;
+  /** How much of the canvas shows, from its top: the tilted table clips the rest. Clamp uses it; null is all of it. */
+  visibleHeight: number | null = null;
 
   constructor(
     private readonly app: Application,
@@ -191,7 +193,7 @@ export class BoardRenderer {
   }
 
   private viewport_size(): { width: number; height: number } {
-    return { width: this.app.screen.width, height: this.app.screen.height };
+    return { width: this.app.screen.width, height: this.visibleHeight ?? this.app.screen.height };
   }
 
   /**

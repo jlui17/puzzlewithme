@@ -1,6 +1,6 @@
 import { CELL_SIZE, matBounds, scatterBounds } from "@puzzlewithme/geometry";
 import {
-  BOARD_FIT_TRAY_INSET_PX,
+  BOARD_FIT_MENU_INSET_PX,
   MAX_ZOOM_CELL_FILL,
   MIN_ZOOM_BOARD_MARGIN,
   PAN_OVERSCROLL_PX,
@@ -37,12 +37,12 @@ export function screenToWorld(cam: Camera, sx: number, sy: number): { x: number;
 
 /**
  * The area the mat is fit and centered in: the viewport minus the band the
- * tray occupies along the bottom. Panning still uses the full viewport, so
- * pieces can be dragged under the tray and back out — this only keeps the
- * fit-to-screen view from placing the mat's hem against it.
+ * room menu occupies along the bottom. Panning still uses the full viewport,
+ * so pieces can be dragged under the menu and back out — this only keeps the
+ * fit-to-screen view from placing pieces under it.
  */
 function fitBox(vp: Viewport): Viewport {
-  return { width: vp.width, height: Math.max(1, vp.height - BOARD_FIT_TRAY_INSET_PX) };
+  return { width: vp.width, height: Math.max(1, vp.height - BOARD_FIT_MENU_INSET_PX) };
 }
 
 /**
@@ -110,7 +110,7 @@ function clampEdge(edge: number, worldSize: number, vpSize: number): number {
 
 /**
  * Initial camera: the pieces and the frame they ring, centered in the area
- * above the tray. Fits scatterBounds rather than the whole mat, because the mat
+ * above the menu. Fits scatterBounds rather than the whole mat, because the mat
  * is always landscape while the work is the picture's shape — fitting the cloth
  * on a tall phone screen shrank the pieces to specks between two bands of empty
  * table. The mat's spare corners are still reachable, just by zooming out
@@ -128,20 +128,35 @@ export function fitCamera(rows: number, cols: number, vp: Viewport): Camera {
   return { x, y, scale };
 }
 
-/** Zoom around a screen anchor (cursor), keeping the world point under it fixed. */
+/**
+ * Zoom to `scale`, moving the world point drawn at canvas pixel `from` (under
+ * the current camera) to canvas pixel `to` (under the new one). A wheel zoom
+ * on a flat canvas passes the pointer as both. On the tilted table the tilt
+ * follows the scale, so the same pointer lands on a different canvas pixel
+ * after the zoom: `to` is the pointer mapped through the new tilt. A pinch
+ * also moves the pointer between the two. The caller clamps `scale`; the
+ * renderer clamps the pan.
+ */
 export function zoomAt(
   cam: Camera,
-  factor: number,
-  anchorX: number,
-  anchorY: number,
-  rows: number,
-  cols: number,
-  vp: Viewport,
+  scale: number,
+  from: { x: number; y: number },
+  to: { x: number; y: number },
 ): Camera {
-  const newScale = clampScale(cam.scale * factor, rows, cols, vp);
-  const world = screenToWorld(cam, anchorX, anchorY);
-  // Solve offset so `world` maps back to the anchor at the new scale.
-  const x = anchorX - world.x * newScale;
-  const y = anchorY - world.y * newScale;
-  return clampCamera({ x, y, scale: newScale }, rows, cols, vp);
+  const world = screenToWorld(cam, from.x, from.y);
+  return { x: to.x - world.x * scale, y: to.y - world.y * scale, scale };
+}
+
+/** Zoom, as a multiple of the fit scale, at which the table has flattened from its resting tilt to level. */
+export const TILT_FLAT_ZOOM = 2.2;
+
+/**
+ * The table's tilt at a camera scale: the resting tilt at the fit zoom,
+ * flattening linearly to 0° at TILT_FLAT_ZOOM times the fit scale and staying
+ * level beyond, so leaning in to work on pieces levels the table. Zoomed out
+ * past the fit it keeps the resting tilt.
+ */
+export function tiltForScale(scale: number, fitScale: number, baseTilt: number): number {
+  const t = (scale / fitScale - 1) / (TILT_FLAT_ZOOM - 1);
+  return baseTilt * (1 - Math.min(1, Math.max(0, t)));
 }

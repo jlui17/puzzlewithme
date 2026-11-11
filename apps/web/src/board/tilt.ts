@@ -44,6 +44,25 @@ export function viewToPlane(t: TiltView, sx: number, sy: number): { x: number; y
 }
 
 /**
+ * A client (viewport) point back to the plane, given where an element lying
+ * at the plane's top-left corner is drawn (its getBoundingClientRect) and its
+ * layout height. The box places the view on the page: the element's top edge
+ * lies on the tilt axis, so it is drawn at the plane's top, and its left is
+ * its near-left corner, which perspective pushes outward.
+ */
+export function clientToPlane(
+  t: TiltView,
+  box: { left: number; top: number },
+  height: number,
+  clientX: number,
+  clientY: number,
+): { x: number; y: number } {
+  const viewLeft = box.left - planeToView(t, 0, height).x;
+  const viewTop = box.top - t.planeTop;
+  return viewToPlane(t, clientX - viewLeft, clientY - viewTop);
+}
+
+/**
  * Plane height whose projected near edge lands `available` px below the
  * plane's top, for a plane whose top sits on the perspective origin's row.
  * (The mock's fitPlane: a depth H projects to H cos t · P/(P − H sin t).)

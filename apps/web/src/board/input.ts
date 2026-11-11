@@ -1,7 +1,25 @@
+import type { Ticker } from "pixi.js";
 import type { SyncClient } from "../sync";
 import type { BoardRenderer } from "./renderer";
 import { WHEEL_ZOOM_RATE } from "./constants";
-import { zoomAt } from "./camera";
+import { clampScale, zoomAt, type Viewport } from "./camera";
+
+/** How long a zoom-button step eases, in ms (the mock's 0.35 s). */
+const ZOOM_BY_MS = 350;
+
+/**
+ * Where the canvas lies on screen. It lies on the Table, which tilts with the
+ * zoom, so a client point maps to canvas pixels through the tilt as drawn
+ * right now. BoardCanvas implements it.
+ */
+export interface CanvasPlacement {
+  /** A client (viewport) point to canvas pixels. */
+  toCanvas(clientX: number, clientY: number): { x: number; y: number };
+  /** Tilts the Table to suit camera scale `scale`. Call it before setting a camera with that scale. */
+  tiltFor(scale: number): void;
+  /** The part of the canvas the player sees: the tilted Table clips the canvas's bottom. */
+  viewport(): Viewport;
+}
 
 /**
  * Translates raw pointer/wheel/touch input into camera moves and drag intents
@@ -15,11 +33,13 @@ import { zoomAt } from "./camera";
  * pointers switch to pinch-zoom.
  */
 export class InputController {
+  /** Pressed pointers, in client coordinates, so a pinch maps through the tilt like the wheel does. */
   private readonly pointers = new Map<number, { x: number; y: number }>();
   private dragging: { groupId: string; offsetX: number; offsetY: number } | null = null;
   private panning = false;
   private panLast = { x: 0, y: 0 };
   private pinch: { dist: number; midX: number; midY: number } | null = null;
+  private zoomTween: { from: number; to: number; elapsedMs: number } | null = null;
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -28,9 +48,12 @@ export class InputController {
     private readonly puzzle: { rows: number; cols: number },
     private readonly isInteractive: () => boolean,
     private readonly reportPointer: (screenX: number, screenY: number) => void,
+    private readonly placement: CanvasPlacement,
+    private readonly ticker: Pick<Ticker, "add" | "remove">,
   ) {}
 
   attach(): void {
+    this.ticker.add(this.tick);
     this.canvas.addEventListener("pointerdown", this.onPointerDown);
     this.canvas.addEventListener("pointermove", this.onPointerMove);
     this.canvas.addEventListener("pointerup", this.onPointerUp);
@@ -39,6 +62,7 @@ export class InputController {
   }
 
   detach(): void {
+    this.ticker.remove(this.tick);
     this.canvas.removeEventListener("pointerdown", this.onPointerDown);
     this.canvas.removeEventListener("pointermove", this.onPointerMove);
     this.canvas.removeEventListener("pointerup", this.onPointerUp);
@@ -46,14 +70,66 @@ export class InputController {
     this.canvas.removeEventListener("wheel", this.onWheel);
   }
 
+  /**
+   * Zooms by `factor` around the middle of the visible board, easing the
+   * camera scale over ZOOM_BY_MS in the ticker (the zoom buttons). A jump
+   * under reduced motion. Wheel and pinch stay immediate.
+   */
+  zoomBy(factor: number): void {
+    const from = this.renderer.camera.scale;
+    const to = clampScale(
+      (this.zoomTween?.to ?? from) * factor,
+      this.puzzle.rows,
+      this.puzzle.cols,
+      this.placement.viewport(),
+    );
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      this.zoomTween = null;
+      this.zoomAtCentre(to);
+      return;
+    }
+    this.zoomTween = { from, to, elapsedMs: 0 };
+  }
+
+  private readonly tick = (ticker: Ticker): void => {
+    const tween = this.zoomTween;
+    if (!tween) return;
+    tween.elapsedMs += ticker.deltaMS;
+    const t = Math.min(1, tween.elapsedMs / ZOOM_BY_MS);
+    const eased = 1 - (1 - t) ** 3;
+    // Geometric, so the zoom feels even the way the wheel's exponential steps do.
+    this.zoomAtCentre(tween.from * (tween.to / tween.from) ** eased);
+    if (t === 1) this.zoomTween = null;
+  };
+
+  private zoomAtCentre(scale: number): void {
+    const vp = this.placement.viewport();
+    const centre = { x: vp.width / 2, y: vp.height / 2 };
+    const cam = this.renderer.camera;
+    this.placement.tiltFor(scale);
+    this.renderer.setCamera(zoomAt(cam, scale, centre, centre));
+  }
+
+  /**
+   * Sets the camera to `scale`, moving the world point under client point
+   * `from` to client point `to`. Each is mapped through its own tilt: `from`
+   * through the tilt drawn now, `to` through the one the new scale brings.
+   */
+  private zoomTo(scale: number, from: { x: number; y: number }, to: { x: number; y: number }): void {
+    const cam = this.renderer.camera;
+    const fromCanvas = this.placement.toCanvas(from.x, from.y);
+    this.placement.tiltFor(scale);
+    const toCanvas = this.placement.toCanvas(to.x, to.y);
+    this.renderer.setCamera(zoomAt(cam, scale, fromCanvas, toCanvas));
+  }
+
   private localXY(e: PointerEvent): { x: number; y: number } {
-    const rect = this.canvas.getBoundingClientRect();
-    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    return this.placement.toCanvas(e.clientX, e.clientY);
   }
 
   private onPointerDown = (e: PointerEvent): void => {
     const { x, y } = this.localXY(e);
-    this.pointers.set(e.pointerId, { x, y });
+    this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     this.canvas.setPointerCapture(e.pointerId);
 
     if (this.pointers.size === 2) {
@@ -97,7 +173,7 @@ export class InputController {
       return;
     }
     const { x, y } = this.localXY(e);
-    this.pointers.set(e.pointerId, { x, y });
+    this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     this.reportPointer(x, y);
 
     if (this.pinch) {
@@ -142,17 +218,17 @@ export class InputController {
 
   private onWheel = (e: WheelEvent): void => {
     e.preventDefault();
-    const rect = this.canvas.getBoundingClientRect();
-    const ax = e.clientX - rect.left;
-    const ay = e.clientY - rect.top;
+    this.zoomTween = null;
     // Exponential so a notch feels the same at any zoom; negative deltaY = in.
     const factor = Math.exp(-e.deltaY * WHEEL_ZOOM_RATE);
-    this.renderer.setCamera(
-      zoomAt(this.renderer.camera, factor, ax, ay, this.puzzle.rows, this.puzzle.cols, {
-        width: this.canvas.clientWidth,
-        height: this.canvas.clientHeight,
-      }),
+    const scale = clampScale(
+      this.renderer.camera.scale * factor,
+      this.puzzle.rows,
+      this.puzzle.cols,
+      this.placement.viewport(),
     );
+    const pointer = { x: e.clientX, y: e.clientY };
+    this.zoomTo(scale, pointer, pointer);
   };
 
   private relayCursor(sx: number, sy: number): void {
@@ -181,6 +257,7 @@ export class InputController {
   }
 
   private beginPinch(): void {
+    this.zoomTween = null;
     const c = this.twoPointerCenter();
     this.pinch = { dist: c.dist || 1, midX: c.midX, midY: c.midY };
   }
@@ -188,13 +265,15 @@ export class InputController {
   private updatePinch(): void {
     if (!this.pinch) return;
     const c = this.twoPointerCenter();
-    const factor = c.dist / this.pinch.dist;
-    const cam = this.renderer.camera;
-    const vp = { width: this.canvas.clientWidth, height: this.canvas.clientHeight };
-    // Zoom around the pinch midpoint, then pan by its screen drift.
-    let next = zoomAt(cam, factor, this.pinch.midX, this.pinch.midY, this.puzzle.rows, this.puzzle.cols, vp);
-    next = { x: next.x + (c.midX - this.pinch.midX), y: next.y + (c.midY - this.pinch.midY), scale: next.scale };
-    this.renderer.setCamera(next);
+    const scale = clampScale(
+      this.renderer.camera.scale * (c.dist / this.pinch.dist),
+      this.puzzle.rows,
+      this.puzzle.cols,
+      this.placement.viewport(),
+    );
+    // Zoom around the pinch midpoint and follow its drift: the world point
+    // under the old midpoint ends up under the new one.
+    this.zoomTo(scale, { x: this.pinch.midX, y: this.pinch.midY }, { x: c.midX, y: c.midY });
     this.pinch = { dist: c.dist, midX: c.midX, midY: c.midY };
   }
 }

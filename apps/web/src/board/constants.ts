@@ -41,14 +41,13 @@ export const MAX_TILE_PX = 128;
 export const MIN_ZOOM_BOARD_MARGIN = 0.92;
 
 /**
- * Screen pixels held clear below the board when fitting it, so the fit view
- * never butts the mat's hem up against the tray. Sized from the tray's own
- * geometry in globals.css (.room-menu: 24px bottom inset + 9px padding + a
- * 42px button + 9px padding = 84px) plus ~20px of visible table between the
- * two. Only the tray gets this clearance: the floating paper (brew slip,
- * players card) is meant to lie ON the mat, so it keeps overlapping.
+ * Canvas pixels held clear at the bottom of the visible board when fitting it,
+ * so the fit view never puts pieces under the room menu. The mock's board
+ * inset, which is the menu pill's footprint: 20px bottom inset + 1px border +
+ * 4px padding + a ~36px button + 4px padding + 1px border = 66px. The players
+ * panel lies over the board and is cleared by panning (PAN_OVERSCROLL_PX).
  */
-export const BOARD_FIT_TRAY_INSET_PX = 104;
+export const BOARD_FIT_MENU_INSET_PX = 66;
 /** A single cell fills this fraction of the smaller viewport dimension at max zoom. */
 export const MAX_ZOOM_CELL_FILL = 0.45;
 
@@ -105,12 +104,11 @@ export const WHEEL_ZOOM_RATE = 0.0015;
  * viewport on an axis (e.g. at min zoom) the camera is locked to a single
  * centered position with zero pan range on that axis, so a piece rendered
  * under a fixed corner overlay could never be dragged clear of it by panning
- * alone. Sized to clear the widest such overlay, the PlayersPanel
- * (.players-panel in globals.css: 256px wide, 24px right inset = 280px),
- * rounded up for a small buffer. Guessed from that one measurement, not
- * tuned against other viewport sizes.
+ * alone. Sized to clear the widest such overlay, the players panel (the
+ * mock's .players: 300px wide, 24px right inset = 324px). Taken from that one
+ * measurement, not tuned against other viewport sizes.
  */
-export const PAN_OVERSCROLL_PX = 290;
+export const PAN_OVERSCROLL_PX = 324;
 
 /**
  * Render-time delay for interpolating remotely-held group motion, in ms.
