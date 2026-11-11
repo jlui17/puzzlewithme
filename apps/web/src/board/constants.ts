@@ -117,6 +117,13 @@ export const FRAME_GAP_PX = 8;
 export const FRAME_WIDTH_PX = 1;
 
 /**
+ * The play area's line is the picture outline's dashed line at this fraction
+ * of its opacity: faint enough not to compete with the outline, so a player
+ * notices it only when a piece is near it. Picked by eye in both lights.
+ */
+export const PLAY_AREA_LINE_ALPHA = 0.5;
+
+/**
  * Fractional zoom change that triggers an outline redraw. The outline is
  * hundreds of dash segments, so it is rebuilt on a ratio step rather than every
  * frame of a pinch; 3% is far below the ~1px of drift a viewer could notice at

@@ -1,4 +1,4 @@
-import { CELL_SIZE, framePosition, type Puzzle } from "@puzzlewithme/geometry";
+import { CELL_SIZE, framePosition, playArea, type Puzzle } from "@puzzlewithme/geometry";
 import type { BoardState, Clock, MotionState, RenderGroup, Vec2 } from "../sync";
 import { Application, Color, Container, Graphics, Sprite, Text, type Texture } from "pixi.js";
 import type { AtlasResult } from "./atlas";
@@ -28,6 +28,7 @@ import {
   LAMP_HEIGHT_PX,
   MOCK_UNIT,
   PIECE_SIDE_DEPTH,
+  PLAY_AREA_LINE_ALPHA,
 } from "./constants";
 import { pointInPolygon, worldToGroup } from "./hit-test";
 import { shadowOffset } from "./shadow";
@@ -227,9 +228,11 @@ export class BoardRenderer {
   }
 
   /**
-   * The picture outline: a faint fill and a dashed line. The dash and stroke
-   * are screen sizes divided back into world units, so the line looks the
-   * same at every zoom; that makes it camera-dependent, redrawn from
+   * The picture outline: a faint fill and a dashed line. Around it, the same
+   * dashed line, fainter, on the play area: the edge the server clamps drops
+   * to, so a piece dropped past it is seen to land against it. The dash and
+   * stroke are screen sizes divided back into world units, so the lines look
+   * the same at every zoom; that makes them camera-dependent, redrawn from
    * applyCamera.
    */
   private drawFrame(): void {
@@ -246,11 +249,17 @@ export class BoardRenderer {
         this.frame.moveTo(fromX + dx * at, fromY + dy * at).lineTo(fromX + dx * end, fromY + dy * end);
       }
     };
-    run(0, 0, 1, 0, w);
-    run(w, 0, 0, 1, h);
-    run(w, h, -1, 0, w);
-    run(0, h, 0, -1, h);
+    const dashedRect = (x: number, y: number, rw: number, rh: number): void => {
+      run(x, y, 1, 0, rw);
+      run(x + rw, y, 0, 1, rh);
+      run(x + rw, y + rh, -1, 0, rw);
+      run(x, y + rh, 0, -1, rh);
+    };
+    dashedRect(0, 0, w, h);
     this.frame.stroke({ width: FRAME_WIDTH_PX / scale, color: this.theme.frameStroke });
+    const area = playArea(this.puzzle.rows, this.puzzle.cols);
+    dashedRect(area.minX, area.minY, area.maxX - area.minX, area.maxY - area.minY);
+    this.frame.stroke({ width: FRAME_WIDTH_PX / scale, color: this.theme.frameStroke, alpha: PLAY_AREA_LINE_ALPHA });
   }
 
   /** Re-reads the active theme and repaints everything themed in the scene. */
