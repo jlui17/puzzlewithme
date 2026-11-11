@@ -509,11 +509,21 @@ export class BoardRenderer {
     this.lockedShadowLayer.visible = !this.glow.visible;
     const now = this.clock.now();
     const lamp = { x: this.app.screen.width / 2, y: -LAMP_HEIGHT_PX };
+    // A group picked up or put down looks different: rebuild it before placing
+    // it, so this very frame draws it lifted (or not) with its shadows placed.
     const pickedUpOrPutDown: RenderGroup[] = [];
     for (const [id, node] of this.nodes) {
       const group = state.groups.get(id);
+      if (group && group.heldBy !== node.heldBy) pickedUpOrPutDown.push(group);
+    }
+    for (const group of pickedUpOrPutDown) {
+      destroyNode(this.nodes.get(group.id)!);
+      this.nodes.delete(group.id);
+      this.buildNode(group);
+    }
+    for (const [id, node] of this.nodes) {
+      const group = state.groups.get(id);
       if (!group) continue;
-      if (group.heldBy !== node.heldBy) pickedUpOrPutDown.push(group);
       const pos = renderPosition(state.motion.get(id), group.position, now - INTERP_DELAY_MS);
       const cx = pos.x + node.centre.x;
       const cy = pos.y + node.centre.y;
@@ -531,11 +541,6 @@ export class BoardRenderer {
       );
       // The shadow is of the face and the side together, so it starts half the side's depth down.
       node.shadows.position.set(node.centre.x + offset.x, node.centre.y + offset.y + PIECE_SIDE_DEPTH / 2);
-    }
-    for (const group of pickedUpOrPutDown) {
-      destroyNode(this.nodes.get(group.id)!);
-      this.nodes.delete(group.id);
-      this.buildNode(group);
     }
     this.updateCursors(state, now);
   };
