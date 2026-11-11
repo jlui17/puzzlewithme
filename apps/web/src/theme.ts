@@ -1,6 +1,7 @@
 /**
- * Theme registry: the sole palette home for the Pixi board (0xRRGGBB ints —
- * the canvas can't use CSS variables). CSS reads its palette from
+ * Theme registry: the sole palette home for the Pixi board (0xRRGGBB ints, or
+ * CSS color strings where a color carries alpha — the canvas can't read CSS
+ * variables). CSS reads its palette from
  * `:root[data-theme=...]` blocks in globals.css; theme.test.ts pins the
  * pairing (every theme id here has a CSS block with the full var set).
  *
@@ -8,57 +9,23 @@
  * CSS layer, so no canvas color lives here.
  */
 
-/**
- * The two tones a linen thread is drawn from. Canvas fill styles, not Pixi
- * ints, because the weave is baked to a texture on a 2D canvas (board/linen.ts)
- * — they carry alpha, and they sit over `mat` rather than replacing it.
- */
-export interface LinenWeave {
-  /** Between the threads. */
-  shadow: string;
-  /** The lit side of each thread. */
-  highlight: string;
-}
+/** Where loose pieces' shadows fall from: the evening lamp, or the morning's overcast sky. */
+export type ShadowFrom = "lamp" | "overhead";
 
 export interface BoardTheme {
-  /** Linen mat the puzzle is laid out on, over the table. */
-  mat: number;
-  matAlpha: number;
-  weave: LinenWeave;
-  /** Dashed stitch line inset from the mat's hem. */
-  stitch: number;
-  /** Board outline stroke + faint board fill tint. */
-  frameStroke: number;
+  /** Dashed picture outline. */
+  frameStroke: string;
+  frameFill: string;
+  /** The dark side face showing below a loose piece. */
+  pieceSide: number;
+  /** The thin light edge that keeps loose pieces visible on the wood. */
+  pieceEdge: string;
+  /** Opacity of a loose piece's shadow. */
+  shadowAlpha: number;
+  /** "lamp": shadows fall away from the lamp; "overhead": straight down and softer. */
+  shadowFrom: ShadowFrom;
   /** Text on remote players' cursor name pills, which take the player's color. */
   cursorLabelText: number;
-}
-
-/** Walnut tones for the world-space table slab (board/table-surface.ts). */
-export interface WoodPalette {
-  base: number;
-  band: number;
-  /** Canvas fill styles with alpha: the grain swatch is baked on a 2D canvas. */
-  dark: string;
-  light: string;
-  knot: number;
-  knotRing: number;
-  check: number;
-}
-
-/** Colors for the loose table objects (board/table-props.ts). */
-export interface PropPalette {
-  notebook: number;
-  notebookEdge: number;
-  pages: number;
-  band: number;
-  pen: number;
-  penHighlight: number;
-  brass: number;
-  pods: number;
-  podsShade: number;
-  coffee: number;
-  crema: number;
-  porcelain: number;
 }
 
 export interface Theme {
@@ -68,14 +35,12 @@ export interface Theme {
   /** Label of the control that leaves this light for the next one, e.g. "Switch to morning". */
   switchLabel: string;
   board: BoardTheme;
-  wood: WoodPalette;
-  props: PropPalette;
 }
 
 /*
  * Two lights at the window seat: a rainy evening (the default, listed first so
- * it is also the fallback) and an overcast morning. The board, wood and props
- * values are the previous day/night palettes carried over under the new ids.
+ * it is also the fallback) and an overcast morning. Board values are the
+ * Window Seat mock's (designs/window-seat/index.html) for each light.
  */
 export const THEMES: readonly Theme[] = [
   {
@@ -83,35 +48,13 @@ export const THEMES: readonly Theme[] = [
     label: "Rainy evening",
     switchLabel: "Switch to morning",
     board: {
-      mat: 0x8e7d5f,
-      matAlpha: 1,
-      weave: { shadow: "rgba(30,20,8,0.22)", highlight: "rgba(255,235,200,0.07)" },
-      stitch: 0x281c0c,
-      frameStroke: 0x1e1408,
-      cursorLabelText: 0x12202f,
-    },
-    wood: {
-      base: 0x2e1c0d,
-      band: 0x3a2412,
-      dark: "rgba(5,2,0,0.58)",
-      light: "rgba(176,128,78,0.1)",
-      knot: 0x120802,
-      knotRing: 0x2e1c0d,
-      check: 0x080300,
-    },
-    props: {
-      notebook: 0x613329,
-      notebookEdge: 0x452219,
-      pages: 0xb9aa93,
-      band: 0x2f190b,
-      pen: 0x141c27,
-      penHighlight: 0x293543,
-      brass: 0xcfa860,
-      pods: 0xcfc5b7,
-      podsShade: 0x8f8578,
-      coffee: 0x6a4527,
-      crema: 0xd6a870,
-      porcelain: 0xc9b89e,
+      frameStroke: "rgba(246,238,224,0.16)",
+      frameFill: "rgba(255,255,255,0.025)",
+      pieceSide: 0x1a1008,
+      pieceEdge: "rgba(255,238,214,0.75)",
+      shadowAlpha: 0.62,
+      shadowFrom: "lamp",
+      cursorLabelText: 0x1b1410,
     },
   },
   {
@@ -119,35 +62,13 @@ export const THEMES: readonly Theme[] = [
     label: "Overcast morning",
     switchLabel: "Switch to evening",
     board: {
-      mat: 0xdccaa4,
-      matAlpha: 1,
-      weave: { shadow: "rgba(150,124,84,0.16)", highlight: "rgba(255,247,230,0.18)" },
-      stitch: 0x78603c,
-      frameStroke: 0x5a4426,
-      cursorLabelText: 0xfff8ef,
-    },
-    wood: {
-      base: 0x5a3821,
-      band: 0x6b4527,
-      dark: "rgba(34,18,7,0.48)",
-      light: "rgba(214,163,106,0.16)",
-      knot: 0x231205,
-      knotRing: 0x4b2d16,
-      check: 0x1a0c03,
-    },
-    props: {
-      notebook: 0x8e4536,
-      notebookEdge: 0x66301f,
-      pages: 0xeaddc7,
-      band: 0x2f190b,
-      pen: 0x1e2836,
-      penHighlight: 0x3a4759,
-      brass: 0xcfa860,
-      pods: 0xf3ede4,
-      podsShade: 0xb8ac9d,
-      coffee: 0x6a4527,
-      crema: 0xd6a870,
-      porcelain: 0xefe3d0,
+      frameStroke: "rgba(248,242,232,0.2)",
+      frameFill: "rgba(255,255,255,0.025)",
+      pieceSide: 0x2a2019,
+      pieceEdge: "rgba(255,238,214,0.75)",
+      shadowAlpha: 0.38,
+      shadowFrom: "overhead",
+      cursorLabelText: 0x1b1410,
     },
   },
 ];

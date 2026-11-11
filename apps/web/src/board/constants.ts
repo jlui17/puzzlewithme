@@ -52,48 +52,68 @@ export const BOARD_FIT_MENU_INSET_PX = 66;
 export const MAX_ZOOM_CELL_FILL = 0.45;
 
 /**
- * How much the mat's linen weave scales with the camera, as an exponent on the
- * camera scale: 0 pins the texture to screen space (the mat stops reading as
- * an object lying on the table), 1 locks it to world space (zooming in on a
- * single piece magnifies a 4-thread weave into burlap). 0.35 keeps the threads
- * visibly attached to the mat while holding the on-screen pitch to roughly
- * 1.5–6 px across the whole zoom range. Picked by eye against that range.
+ * The Window Seat mock (designs/window-seat/index.html) draws a cell 24 units
+ * wide and gives every depth cue in those units. Sizing the cues in MOCK_UNITs
+ * makes a piece here look like the mock's at the same on-screen cell size, and
+ * zooming scales them with the piece, as the mock's zoom does.
  */
-export const WEAVE_ZOOM_DAMPING = 0.35;
+export const MOCK_UNIT = CELL_SIZE / 24;
+
+/** How far a loose piece's dark side face shows below its face. */
+export const PIECE_SIDE_DEPTH = 3 * MOCK_UNIT;
+/** The light edge around a loose piece (the outer half of the mock's 1-unit stroke). */
+export const PIECE_EDGE_WIDTH = 0.5 * MOCK_UNIT;
+/** The dark line between assembled pieces, drawn half inside each piece. */
+export const PIECE_JOINT_WIDTH = 0.8 * MOCK_UNIT;
+export const PIECE_JOINT_COLOR = "rgba(0,0,0,0.3)";
+
+/** Shadow softness (Gaussian sigma) for each light: the lamp's is crisper than the overcast sky's. */
+export const SHADOW_BLUR = { lamp: 2.2 * MOCK_UNIT, overhead: 3.5 * MOCK_UNIT } as const;
+
+/** The lamp, in screen pixels above the top centre of the view; evening shadows fall away from it. */
+export const LAMP_HEIGHT_PX = 220;
 
 /**
- * Zoom window over which the weave fades into the mat's flat color, measured
- * as one cell's on-screen size (CELL_SIZE * camera scale). Below the low end
- * the thread pitch is finer than the pixel grid, where it reads as moiré
- * competing with the pieces rather than as cloth; above the high end the mat
- * is fully woven. The window has to sit under the fit-to-screen zoom of a
- * mid-size board (~20 px/cell for 100 pieces on a laptop) or the default view
- * — the one players spend the most time in — would always be flat cloth,
- * while a 1000-piece board still fits at ~12 px/cell and stays nearly flat.
- * Derived from those two fit zooms, not measured on-device.
+ * A piece another player holds lifts: scaled about its centre, raised, and its
+ * shadow pushed LIFT times further and spread wider. A piece you drag yourself
+ * only gets the shadow, so what you line up is exactly where it drops: the
+ * raise is past the snap tolerance, and the scale would shift a wide group's
+ * edges. The shadow's spread stands in for the mock's 2.6x blur, which would
+ * need a third shadow bake; picked by eye against the mock.
  */
-export const WEAVE_FADE_MIN_CELL_PX = 10;
-export const WEAVE_FADE_MAX_CELL_PX = 22;
+export const HELD_SCALE = 1.08;
+export const HELD_RAISE = 6 * MOCK_UNIT;
+export const HELD_SHADOW_LIFT = 2.6;
+export const HELD_SHADOW_SCALE = 1.15;
+
+/** Assembled pieces cast one soft shadow straight down, in both lights. */
+export const ASSEMBLED_SHADOW_DROP = 3 * MOCK_UNIT;
+export const ASSEMBLED_SHADOW_ALPHA = 0.6;
 
 /**
- * The hem's stitching, in screen pixels: redrawn against the camera so it
- * reads as the same dashed line at every zoom, the way the weave holds a
- * near-constant thread pitch. Sized in world units instead, it would be a
- * sub-pixel hairline at the fit-to-screen zoom where the hem is most visible.
- * Its POSITION is world-space (the playArea rect from @puzzlewithme/geometry),
- * so the line a player sees is exactly the limit pieces scatter and clamp to.
+ * The completed picture's amber glow: color, peak opacity, and how far it
+ * spreads past the picture (2.5 sigma of the mock's 14-unit glow).
  */
-export const HEM_DASH_PX = 10;
-export const HEM_GAP_PX = 7;
-export const HEM_WIDTH_PX = 1;
+export const COMPLETED_GLOW_COLOR = 0xf1b25a;
+export const COMPLETED_GLOW_ALPHA = 0.35;
+export const COMPLETED_GLOW_SPREAD = 35 * MOCK_UNIT;
 
 /**
- * Fractional zoom change that triggers a hem redraw. The hem is hundreds of
- * dash segments, so it is rebuilt on a ratio step rather than every frame of a
- * pinch; 3% is far below the ~1px of drift a viewer could notice at these
- * dash sizes. Picked from that visibility floor, not measured.
+ * The picture outline's dashes, in screen pixels: redrawn against the camera
+ * so it reads as the same dashed line at every zoom. Sized in world units it
+ * would be a sub-pixel hairline at the fit zoom of a big board.
  */
-export const HEM_REDRAW_RATIO = 0.03;
+export const FRAME_DASH_PX = 6;
+export const FRAME_GAP_PX = 8;
+export const FRAME_WIDTH_PX = 1;
+
+/**
+ * Fractional zoom change that triggers an outline redraw. The outline is
+ * hundreds of dash segments, so it is rebuilt on a ratio step rather than every
+ * frame of a pinch; 3% is far below the ~1px of drift a viewer could notice at
+ * these dash sizes. Picked from that visibility floor, not measured.
+ */
+export const FRAME_REDRAW_RATIO = 0.03;
 
 /** Wheel zoom multiplier per notch; ~1.0015^deltaY gives smooth trackpad + mouse feel. */
 export const WHEEL_ZOOM_RATE = 0.0015;
