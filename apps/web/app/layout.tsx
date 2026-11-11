@@ -9,8 +9,9 @@ import "./room.css";
 // Figtree sets everything, Newsreader is the serif on headings, Kalam is the
 // handwriting. All self-hosted by next/font at build time, so no runtime Google
 // request; globals.css falls back to system faces if a variable is ever absent.
+// Newsreader carries its optical-size axis: the headings set "opsz" as the mock does.
 const figtree = Figtree({ subsets: ["latin"], variable: "--fs" });
-const newsreader = Newsreader({ subsets: ["latin"], style: ["normal", "italic"], variable: "--fserif" });
+const newsreader = Newsreader({ subsets: ["latin"], style: ["normal", "italic"], axes: ["opsz"], variable: "--fserif" });
 const kalam = Kalam({ subsets: ["latin"], weight: "700", variable: "--fhand" });
 
 export const metadata: Metadata = {

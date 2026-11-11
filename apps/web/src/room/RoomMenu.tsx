@@ -42,7 +42,7 @@ export function RoomMenu({
           className="menu-btn"
           aria-label="Who's here"
           aria-expanded={playersOpen}
-          aria-controls="players"
+          aria-controls={playersOpen ? "players" : undefined}
           onClick={onTogglePlayers}
         >
           <svg viewBox="0 0 24 24" aria-hidden="true">
