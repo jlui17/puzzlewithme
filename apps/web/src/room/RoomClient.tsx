@@ -14,7 +14,11 @@ import {
 } from "../sync";
 import { getRoom } from "../api";
 import { imageUrl, wsUrl } from "../config";
-import { Cup, TableSurface } from "../table";
+import { Cup } from "../scene/Cup";
+import { Scene } from "../scene/Scene";
+import { Sill } from "../scene/Sill";
+import { ROOM_TILT_DEG, Table } from "../scene/Table";
+import { WindowBand } from "../scene/WindowBand";
 import { CompletionOverlay, type Contribution } from "./CompletionOverlay";
 import { BrewSlip, PlayersPanel, type PlayerView } from "./PlayersPanel";
 import { RoomMenu } from "./RoomMenu";
@@ -102,7 +106,7 @@ export function RoomClient({ roomId }: { roomId: string }) {
   if (load.phase === "loading") {
     return (
       <StateCard>
-        <Cup className="state-cup" />
+        <Cup color="var(--p4)" />
         <h2>Brewing your puzzle…</h2>
         <p>Laying out the pieces and pulling up chairs.</p>
       </StateCard>
@@ -136,10 +140,13 @@ export function RoomClient({ roomId }: { roomId: string }) {
 /** A slip left on an empty table: every non-playable room state renders here. */
 function StateCard({ children }: { children: ReactNode }) {
   return (
-    <div className="state-shell">
-      <TableSurface />
-      <div className="state-card">{children}</div>
-    </div>
+    <Scene screen="room">
+      <WindowBand />
+      <Sill />
+      <Table tilt={ROOM_TILT_DEG}>
+        <div className="state-card">{children}</div>
+      </Table>
+    </Scene>
   );
 }
 
@@ -252,9 +259,12 @@ function RoomLive({ settings }: { settings: RoomSettings }) {
   }
 
   return (
-    <div className="room-shell">
-      <TableSurface />
-      <BoardCanvas sync={sync} settings={settings} interactive={!completed} pointerRef={pointerRef} />
+    <Scene screen="room">
+      <WindowBand rainPaused={completed} />
+      <Sill />
+      <Table tilt={ROOM_TILT_DEG}>
+        <BoardCanvas sync={sync} settings={settings} interactive={!completed} pointerRef={pointerRef} />
+      </Table>
 
       <ConnectionBadge status={panel.connection} />
 
@@ -294,7 +304,7 @@ function RoomLive({ settings }: { settings: RoomSettings }) {
       )}
 
       <DebugOverlay sync={sync} />
-    </div>
+    </Scene>
   );
 }
 

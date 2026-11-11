@@ -13,8 +13,11 @@ import Link from "next/link";
 import * as api from "../src/api";
 import type { Source } from "../src/api";
 import { imageUrl, roomImageUrl } from "../src/config";
-import { Cup, TableSurface } from "../src/table";
-import { ThemeSwitch } from "../src/theme-switcher";
+import { Cup } from "../src/scene/Cup";
+import { Scene } from "../src/scene/Scene";
+import { Sill } from "../src/scene/Sill";
+import { HOME_TILT_DEG, Table } from "../src/scene/Table";
+import { WindowBand } from "../src/scene/WindowBand";
 
 const ACCEPTED = ["image/jpeg", "image/png", "image/webp"];
 
@@ -186,13 +189,10 @@ export default function CreatePage() {
   const pieces = grid === null ? target : grid.rows * grid.cols;
 
   return (
-    <main className="table-page">
-      <TableSurface />
-
-      <div className="home-toggle">
-        <ThemeSwitch />
-      </div>
-
+    <Scene screen="home">
+      <WindowBand />
+      <Sill />
+      <Table tilt={HOME_TILT_DEG} growWithContent>
       <div className="home-layout">
         <section className="slip">
           <div className="slip-head">
@@ -373,8 +373,9 @@ export default function CreatePage() {
         </aside>
       </div>
 
-      <Cup className="home-cup" />
-    </main>
+      <Cup color="var(--p4)" />
+      </Table>
+    </Scene>
   );
 }
 

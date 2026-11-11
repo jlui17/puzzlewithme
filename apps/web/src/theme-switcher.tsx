@@ -8,7 +8,7 @@ import { applyTheme, currentTheme, subscribeTheme, THEMES } from "./theme";
  * syncs to the real choice after mount to avoid a hydration mismatch when
  * localStorage holds a non-default theme.
  */
-function useThemeId(): string {
+export function useThemeId(): string {
   const [id, setId] = useState(THEMES[0]!.id);
   useEffect(() => {
     setId(currentTheme().id);
