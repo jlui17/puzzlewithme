@@ -85,6 +85,7 @@ agent-browser mouse up
 DOM-verifiable signals (these ARE in `snapshot` / `wait --text`):
 - Room header (top of the table): `N of M pieces placed` (`All M pieces placed` once finished), the `Leave the table` link, and one cup per player with a `N placed` count.
 - Room menu (bottom pill): `See the picture`, `Who's here` (its text also shows the player count), `Who did what` (only once finished), the theme switch, and `Leave the table`. The theme switch is named for the light you are in and where it goes next: `Rainy evening now. Switch to morning.`, and `Overcast morning now. Switch to evening.` once switched.
+- Zoom buttons: `Lean in (zoom in)` and `Lean back (zoom out)`. The lamp on the sill is also a button, named `Switch the light. It is a rainy evening now.`
 - The players panel is closed until `Who's here` is pressed; it then lists display names and per-player counts under `N at the table`.
 - A room that is still connecting or offline shows a small badge (`pulling up a chair…`, `finding the table again…`, `you slipped offline`, `full house`).
 - Append `?debug=1` to the room URL for the sync-diagnostics overlay (message counts per type).
