@@ -1,0 +1,290 @@
+/*
+ * The room (src/room/): the header lying on the table, the flat chrome over
+ * it (zoom, menu, who's here, connection badge), the overlays, and the card
+ * for every state with no board. Colour never tells players apart on its own:
+ * a player's colour always sits under their initial or next to their name.
+ * The phone breakpoint (760px) matches scene.css.
+ */
+
+/* ---------- The header, on the plane ---------- */
+.room-top {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: start;
+  gap: 16px;
+  padding-top: 10px;
+  padding-left: max(24px, env(safe-area-inset-left, 0px));
+  padding-right: max(24px, env(safe-area-inset-right, 0px));
+}
+/* The header itself is not positioned, so the board under it keeps the pointer between its parts. */
+.room-top > .leave, .room-top > .room-title, .room-top > .cups { position: relative; z-index: 1; }
+.leave { font-size: 14px; color: var(--ink-3); text-decoration: none; white-space: nowrap; align-self: start; padding: 6px 0; justify-self: start; }
+.leave:hover { color: var(--ink); }
+.room-title { text-align: center; }
+.prog { margin-top: 6px; display: flex; align-items: center; justify-content: center; gap: 10px; }
+.prog-bar { width: 140px; height: 3px; border-radius: 2px; background: rgba(255,255,255,.12); overflow: hidden; }
+.prog-bar i { display: block; height: 100%; background: var(--accent); box-shadow: 0 0 8px rgba(241,178,90,.6); border-radius: 2px; }
+.prog-text { font-size: 13px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.pan-hint { display: none; }
+
+/* Friends across the table: their cups. */
+.cups { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 18px; align-self: start; justify-self: end; }
+.cups li { display: flex; flex-direction: column; align-items: center; gap: 1px; width: 72px; }
+.cups .cup { width: 44px; height: 44px; }
+.cups .cup-name { font-size: 13px; font-weight: 500; color: var(--ink); white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.cups .cup-count { font-size: 12px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+
+.my-cup {
+  position: absolute;
+  /* The near edge projects wider than the screen, so the cup sits in from the plane's edge to stay in view. */
+  left: max(11%, env(safe-area-inset-left, 0px));
+  bottom: 24px;
+  display: flex; align-items: flex-end; gap: 12px;
+  z-index: 3;
+  transform-style: preserve-3d;
+}
+.my-cup .cup { width: 56px; height: 56px; }
+.my-cup .cup-label { font-size: 13px; color: var(--ink-3); padding-bottom: 4px; }
+.my-cup .cup-label b { display: block; color: var(--ink); font-weight: 500; }
+
+/* "<name>'s got that one", at the pointer, on the plane. */
+.held-toast {
+  position: absolute;
+  z-index: 4;
+  transform: translate(-50%, calc(-100% - 14px));
+  padding: 4px 14px;
+  border-radius: 999px;
+  background: var(--panel);
+  border: 1px solid var(--panel-line);
+  color: var(--ink);
+  font-size: 13px;
+  white-space: nowrap;
+  pointer-events: none;
+  animation: held-toast 1.8s ease forwards;
+}
+@keyframes held-toast { 0% { opacity: 0; } 15%, 75% { opacity: 1; } 100% { opacity: 0; } }
+
+/* ---------- Flat chrome over the table ---------- */
+.chrome { position: absolute; inset: 0; z-index: 5; pointer-events: none; }
+.chrome > * { pointer-events: auto; }
+
+.zoom-ctl {
+  position: absolute;
+  right: max(24px, env(safe-area-inset-right, 0px));
+  bottom: 84px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.zoom-btn {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  background: var(--panel);
+  border: 1px solid var(--panel-line);
+  color: var(--ink);
+  font-size: 20px; line-height: 1;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.zoom-btn:hover { background: rgba(255,255,255,.08); }
+.zoom-hint { font-size: 11.5px; color: var(--ink-3); text-align: center; font-variant-numeric: tabular-nums; }
+
+/* Menu: dim text along the near edge, brighter when you reach for it. */
+.room-menu {
+  position: absolute;
+  left: 50%; bottom: 20px;
+  transform: translateX(-50%);
+  display: flex; align-items: center; gap: 4px;
+  padding: 4px 6px;
+  border-radius: 999px;
+  background: var(--panel);
+  border: 1px solid var(--panel-line);
+  backdrop-filter: blur(8px);
+  z-index: 4;
+  max-width: calc(100vw - 32px);
+}
+.menu-btn {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  color: var(--ink-2);
+  font-size: 13.5px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.menu-btn:hover, .menu-btn[aria-expanded="true"] { color: var(--ink); background: rgba(255,255,255,.07); }
+.menu-btn svg { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.menu-sep { width: 1px; height: 18px; background: var(--panel-line); margin: 0 2px; }
+
+/* Who's here */
+.players {
+  position: absolute;
+  right: max(24px, env(safe-area-inset-right, 0px));
+  bottom: 84px;
+  width: 300px;
+  box-sizing: border-box;
+  padding: 16px 18px 14px;
+  border-radius: 14px;
+  background: var(--panel);
+  border: 1px solid var(--panel-line);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 18px 40px rgba(0,0,0,.5);
+  z-index: 5;
+}
+.players-head { display: flex; align-items: baseline; justify-content: space-between; padding-right: 30px; }
+.players-head h2 { font-family: var(--fserif); font-style: italic; font-size: 22px; color: var(--ink); }
+.players-head span { color: var(--ink-3); font-size: 13px; }
+.players-close { position: absolute; right: 10px; top: 10px; width: 28px; height: 28px; border-radius: 50%; color: var(--ink-3); font-size: 16px; }
+.players-close:hover { color: var(--ink); background: rgba(255,255,255,.06); }
+.player-rows { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+.player { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; align-items: center; gap: 10px; }
+.player-mark {
+  width: 22px; height: 22px; border-radius: 50%;
+  background: currentColor;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.player-mark b { font-size: 11px; font-weight: 700; color: #1b1410; }
+.player-name { color: var(--ink); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; }
+.player-name .you { margin-left: 8px; font-size: 11.5px; color: var(--ink-3); font-weight: 400; border: 1px solid var(--line); border-radius: 999px; padding: 0 7px; }
+.player-name.self { cursor: text; border-bottom: 1px dotted var(--line-strong); justify-self: start; max-width: 100%; }
+.player-name input { width: 100%; box-sizing: border-box; background: rgba(255,255,255,.04); border: 0; border-bottom: 1px solid var(--accent); color: var(--ink); font-weight: 500; padding: 0 4px; }
+.player-name input:focus { outline: none; }
+.player-score { font-size: 13px; color: var(--ink-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.players-foot { margin: 12px 0 0; font-size: 12.5px; color: var(--ink-3); }
+
+/* Connection: a pill just under the wall; the words say the state, the dot only moves. */
+.conn-badge {
+  position: absolute;
+  left: 50%;
+  top: calc(clamp(48px, 6vh, 64px) + 38px + 10px);
+  transform: translateX(-50%);
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: var(--panel);
+  border: 1px solid var(--panel-line);
+  backdrop-filter: blur(8px);
+  color: var(--ink);
+  font-size: 13px;
+  white-space: nowrap;
+}
+.conn-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ink-3); flex: none; }
+.conn-dot.reconnecting { background: var(--accent); animation: conn-pulse 1.4s ease-in-out infinite; }
+@keyframes conn-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+
+/* ---------- Overlays ---------- */
+.overlay {
+  position: fixed; inset: 0;
+  z-index: 40;
+  background: rgba(8, 5, 3, .72);
+  backdrop-filter: blur(3px);
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px max(16px, env(safe-area-inset-right, 0px)) 24px max(16px, env(safe-area-inset-left, 0px));
+}
+/* The picture, held up to the lamp. */
+.preview-print {
+  max-width: min(860px, 100%);
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 10px 14px;
+  background: #f1eadc;
+  border-radius: 3px;
+  box-shadow: 0 30px 80px rgba(0,0,0,.7);
+  transform: rotate(-.8deg);
+}
+.preview-print img { display: block; width: 100%; height: auto; max-height: calc(100vh - 120px); object-fit: contain; }
+.preview-cap { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 10px; color: #4a3b2c; font-size: 13.5px; }
+.preview-cap b { font-weight: 500; color: #2a1f16; font-family: var(--fserif); font-style: italic; font-size: 17px; }
+
+/* Finished */
+.finish-card, .table-card {
+  width: min(560px, 100%);
+  box-sizing: border-box;
+  padding: 28px 30px 26px;
+  border-radius: 18px;
+  background: var(--panel);
+  border: 1px solid var(--panel-line);
+  box-shadow: 0 30px 80px rgba(0,0,0,.7);
+  position: relative;
+  color: var(--ink);
+}
+.finish-close { position: absolute; right: 12px; top: 12px; width: 32px; height: 32px; border-radius: 50%; color: var(--ink-3); font-size: 18px; }
+.finish-close:hover { color: var(--ink); background: rgba(255,255,255,.06); }
+.finish-card h2 { font-family: var(--fserif); font-style: italic; font-size: 40px; font-variation-settings: "opsz" 72; line-height: 1; }
+.finish-sub { margin: 8px 0 0; color: var(--ink-2); font-size: 15px; }
+.stats { display: flex; flex-wrap: wrap; gap: 10px 30px; margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--panel-line); }
+.stat .value { font-family: var(--fserif); font-size: 28px; line-height: 1; font-variant-numeric: tabular-nums; color: var(--ink); }
+.stat .key { font-size: 12.5px; color: var(--ink-3); margin-top: 4px; }
+.contrib { margin-top: 20px; display: flex; flex-direction: column; gap: 10px; }
+.contrib-bar { grid-column: 2 / span 2; height: 4px; border-radius: 2px; background: rgba(255,255,255,.1); margin-top: -4px; overflow: hidden; }
+.contrib-bar i { display: block; height: 100%; background: currentColor; border-radius: 2px; }
+.finish-actions { margin-top: 24px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
+.finish-foot { font-size: 13px; color: var(--ink-3); margin: 0; }
+
+/* The home's start button, for the room's own cards. */
+.scene[data-screen="room"] .start-btn {
+  display: inline-block;
+  text-decoration: none;
+  padding: 12px 22px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+  font-size: 15px;
+  box-shadow: 0 0 0 1px rgba(255,255,255,.08) inset, 0 8px 24px rgba(241,178,90,.28);
+  transition: transform .15s, box-shadow .15s;
+}
+.scene[data-screen="room"] .start-btn:hover { transform: translateY(-1px); box-shadow: 0 10px 28px rgba(241,178,90,.4); }
+
+/* ---------- A card on the empty table: loading, not found, full, errors ---------- */
+.table-card-wrap { flex: 1; display: flex; align-items: center; justify-content: center; padding: 24px 16px; }
+.table-card { width: min(460px, 100%); text-align: center; display: flex; flex-direction: column; align-items: center; transform-style: preserve-3d; }
+.table-card .stand { margin-bottom: 10px; }
+.table-card h2 { font-family: var(--fserif); font-style: italic; font-size: 30px; font-variation-settings: "opsz" 72; line-height: 1.1; }
+.table-card p { margin: 8px 0 0; color: var(--ink-3); font-size: 15px; }
+.table-card .start-btn { margin-top: 20px; }
+
+/* Sync diagnostics, only with ?debug=1. */
+.debug-overlay {
+  position: fixed; left: 8px; top: 8px; z-index: 60;
+  max-width: calc(100vw - 16px);
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: rgba(0,0,0,.8);
+  color: #e8e8ec;
+  font: 11px/1.4 ui-monospace, Menlo, monospace;
+  pointer-events: none;
+}
+
+/* ---------- Phone ---------- */
+@media (max-width: 760px) {
+  .room-top { grid-template-columns: 1fr auto; grid-template-areas: "leave cups" "title me"; padding-left: 16px; padding-right: 16px; gap: 4px 12px; padding-top: 10px; align-items: end; }
+  .leave { grid-area: leave; align-self: start; }
+  .room-title { grid-area: title; text-align: left; }
+  .prog { justify-content: flex-start; flex-wrap: wrap; gap: 4px 10px; }
+  .prog-bar { width: 120px; }
+  .prog-text { font-size: 12px; }
+  .pan-hint { display: block; margin-top: 4px; font-size: 12px; color: var(--ink-3); }
+  .cups { grid-area: cups; gap: 10px; align-self: start; }
+  .cups li { width: 60px; }
+  .cups .cup { width: 34px; height: 34px; }
+  .cups .cup-name { font-size: 11.5px; }
+  .cups .cup-count { font-size: 11px; white-space: nowrap; }
+  .my-cup { position: relative; left: auto; bottom: auto; grid-area: me; justify-self: end; align-self: end; gap: 8px; padding-bottom: 2px; }
+  .my-cup .cup { width: 40px; height: 40px; }
+  .my-cup .cup-label { font-size: 12px; text-align: right; }
+  .zoom-ctl { right: 16px; bottom: 76px; flex-direction: row; }
+  .zoom-hint { display: none; }
+  .room-menu { position: fixed; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); left: max(16px, env(safe-area-inset-left, 0px)); right: max(16px, env(safe-area-inset-right, 0px)); transform: none; max-width: none; justify-content: space-between; padding: 4px; }
+  .menu-btn { padding: 8px 10px; gap: 0; }
+  .menu-btn span { display: none; }
+  .menu-btn svg { width: 20px; height: 20px; }
+  .menu-sep { display: none; }
+  .players { position: fixed; right: max(16px, env(safe-area-inset-right, 0px)); left: max(16px, env(safe-area-inset-left, 0px)); width: auto; bottom: calc(72px + env(safe-area-inset-bottom, 0px)); }
+  .conn-badge { top: calc(64px + 30px + 10px); }
+  .finish-card { padding: 22px 20px 20px; }
+  .finish-card h2 { font-size: 34px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .held-toast { animation: none; }
+  .conn-dot.reconnecting { animation: none; }
+  .scene[data-screen="room"] .start-btn { transition: none; }
+}

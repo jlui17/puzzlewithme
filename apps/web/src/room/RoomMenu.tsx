@@ -4,20 +4,21 @@ import { useEffect, useState } from "react";
 import { ThemeSwitch } from "../theme-switcher";
 
 /**
- * The tray at the bottom of the table. Every label is an action ("See the
- * picture", not "The picture"), and the players toggle says "who's here"
- * rather than "the table" — the walnut table is the background of every
- * screen, so "hide the table" read as hiding that instead of the roster.
+ * The pill along the table's near edge. Every label is an action ("See the
+ * picture", not "The picture"). "Who did what" appears once the puzzle is
+ * done and brings the finish card back.
  */
 export function RoomMenu({
   imageUrl,
-  playersCollapsed,
+  playerCount,
+  playersOpen,
   onTogglePlayers,
   completed,
   onShowStats,
 }: {
   imageUrl: string;
-  playersCollapsed: boolean;
+  playerCount: number;
+  playersOpen: boolean;
   onTogglePlayers: () => void;
   completed: boolean;
   onShowStats: () => void;
@@ -26,52 +27,58 @@ export function RoomMenu({
 
   return (
     <>
-      <div className="room-menu">
-        <button
-          type="button"
-          className="room-menu-btn"
-          aria-label="See the picture"
-          onClick={() => setPreviewOpen(true)}
-        >
-          🖼️ <span className="room-menu-btn-label">See the picture</span>
+      <nav className="room-menu" aria-label="Room menu">
+        <button type="button" className="menu-btn" aria-label="See the picture" onClick={() => setPreviewOpen(true)}>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="3" y="5" width="18" height="14" rx="2" />
+            <path d="M3 16l5-5 4 4 3-3 6 6" />
+            <circle cx="16" cy="9" r="1.5" />
+          </svg>
+          <span>See the picture</span>
         </button>
         <button
           type="button"
-          className="room-menu-btn"
-          aria-pressed={!playersCollapsed}
-          aria-label={playersCollapsed ? "Show who's here" : "Hide who's here"}
+          className="menu-btn"
+          aria-label="Who's here"
+          aria-expanded={playersOpen}
+          aria-controls="players"
           onClick={onTogglePlayers}
         >
-          👥{" "}
-          <span className="room-menu-btn-label">
-            {playersCollapsed ? "Show who's here" : "Hide who's here"}
-          </span>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="9" cy="8" r="3.5" />
+            <path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6" />
+            <circle cx="17" cy="9" r="2.5" />
+            <path d="M16 14.5c3 0 5.5 2 5.5 5" />
+          </svg>
+          <span>Who&apos;s here · {playerCount}</span>
         </button>
         {completed && (
-          <button
-            type="button"
-            className="room-menu-btn"
-            aria-label="Read the receipt"
-            onClick={onShowStats}
-          >
-            📋 <span className="room-menu-btn-label">Read the receipt</span>
+          <button type="button" className="menu-btn" aria-label="Who did what" onClick={onShowStats}>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M6 3h12v18l-3-2-3 2-3-2-3 2z" />
+              <path d="M9 8h6M9 12h6" />
+            </svg>
+            <span>Who did what</span>
           </button>
         )}
-        <div className="room-menu-sep" aria-hidden="true" />
-        <ThemeSwitch className="room-menu-btn" />
-        <div className="room-menu-sep" aria-hidden="true" />
-        <a href="/" className="room-menu-btn" aria-label="Head out">
-          🏠 <span className="room-menu-btn-label">Head out</span>
+        <span className="menu-sep" aria-hidden="true" />
+        <ThemeSwitch className="menu-btn" />
+        <span className="menu-sep" aria-hidden="true" />
+        <a href="/" className="menu-btn" aria-label="Leave the table">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M10 4H5v16h5" />
+            <path d="M14 8l4 4-4 4M18 12H9" />
+          </svg>
+          <span>Leave</span>
         </a>
-      </div>
+      </nav>
 
-      {previewOpen && (
-        <ImagePreviewOverlay imageUrl={imageUrl} onClose={() => setPreviewOpen(false)} />
-      )}
+      {previewOpen && <ImagePreviewOverlay imageUrl={imageUrl} onClose={() => setPreviewOpen(false)} />}
     </>
   );
 }
 
+/** The picture held up to the lamp, like a print. Any click or Escape puts it back down. */
 function ImagePreviewOverlay({ imageUrl, onClose }: { imageUrl: string; onClose: () => void }) {
   useEffect(() => {
     function onKey(e: KeyboardEvent): void {
@@ -82,14 +89,14 @@ function ImagePreviewOverlay({ imageUrl, onClose }: { imageUrl: string; onClose:
   }, [onClose]);
 
   return (
-    <div className="image-preview-overlay" onClick={onClose}>
-      <div className="image-preview-mat">
+    <div className="overlay" onClick={onClose}>
+      <div className="preview-print">
         {/* Full-resolution room image; next/image adds no value for a same-origin API route. */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={imageUrl} alt="Full puzzle image" />
-        <div className="image-preview-cap">
-          <span className="script">what you&apos;re building</span>
-          <span>tap anywhere to put it back down</span>
+        <img src={imageUrl} alt="The picture you're building" />
+        <div className="preview-cap">
+          <b>The picture you&apos;re building</b>
+          <span>Tap anywhere to put it back down</span>
         </div>
       </div>
     </div>

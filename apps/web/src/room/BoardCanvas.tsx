@@ -15,6 +15,7 @@ import { imageUrl } from "../config";
 import { ROOM_TILT_DEG } from "../scene/Table";
 import type { TableHandle } from "../scene/table-handle";
 import { subscribeTheme } from "../theme";
+import { TableCard } from "./TableCard";
 
 /**
  * The board's box on the Table's plane. Pinned to the plane's top-left corner,
@@ -40,6 +41,7 @@ export function BoardCanvas({
   pointerRef,
   table,
   zoomRef,
+  onZoom,
 }: {
   sync: SyncClient;
   settings: RoomSettings;
@@ -51,10 +53,14 @@ export function BoardCanvas({
   table: React.RefObject<TableHandle | null>;
   /** Set to the zoom buttons' action while the board is up: zoom by a factor, eased. */
   zoomRef?: React.MutableRefObject<((factor: number) => void) | null>;
+  /** Told the zoom, as a multiple of the fit zoom, on every camera change. */
+  onZoom?: (zoom: number) => void;
 }) {
   const mountRef = useRef<HTMLDivElement>(null);
   const interactiveRef = useRef(interactive);
   interactiveRef.current = interactive;
+  const onZoomRef = useRef(onZoom);
+  onZoomRef.current = onZoom;
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -117,6 +123,7 @@ export function BoardCanvas({
           toCanvas: (x, y) => clientToPlane(tilt, pixi.canvas.getBoundingClientRect(), pixi.screen.height, x, y),
           tiltFor: (scale) => {
             tilt = tableHandle.setTilt(tiltForScale(scale, fitScale, restingTilt));
+            onZoomRef.current?.(scale / fitScale);
             // The board's box is the plane's size, so its height is how much of the canvas shows.
             visibleHeight = mount.clientHeight;
             board.visibleHeight = visibleHeight;
@@ -189,13 +196,10 @@ export function BoardCanvas({
 
   if (error) {
     return (
-      <div className="state-shell">
-        <div className="state-card">
-          <div className="script">sorry —</div>
-          <h2>the picture didn&apos;t arrive</h2>
-          <p>{error}</p>
-        </div>
-      </div>
+      <TableCard>
+        <h2>The picture didn&apos;t arrive</h2>
+        <p>{error}</p>
+      </TableCard>
     );
   }
   return <div className="board-mount" ref={mountRef} style={MOUNT_STYLE} />;

@@ -15,6 +15,7 @@ import {
   type Viewport,
 } from "./camera";
 import {
+  BOARD_FIT_HEADER_INSET_PX,
   BOARD_FIT_MENU_INSET_PX,
   MAX_ZOOM_CELL_FILL,
   MIN_ZOOM_BOARD_MARGIN,
@@ -42,13 +43,14 @@ describe("worldToScreen / screenToWorld", () => {
 });
 
 describe("scale bounds", () => {
-  it("minScale fits the whole mat inside the viewport minus the menu band", () => {
+  it("minScale fits the whole mat inside the viewport minus the header and the menu band", () => {
     const s = minScale(ROWS, COLS, VP);
     const b = matBounds(ROWS, COLS);
     expect((b.maxX - b.minX) * s).toBeLessThanOrEqual(VP.width);
-    expect((b.maxY - b.minY) * s).toBeLessThanOrEqual(VP.height - BOARD_FIT_MENU_INSET_PX);
+    const clearHeight = VP.height - BOARD_FIT_HEADER_INSET_PX - BOARD_FIT_MENU_INSET_PX;
+    expect((b.maxY - b.minY) * s).toBeLessThanOrEqual(clearHeight);
     // The margin is applied exactly on the binding axis.
-    const box = { width: VP.width, height: VP.height - BOARD_FIT_MENU_INSET_PX };
+    const box = { width: VP.width, height: clearHeight };
     const rawFit = Math.min(box.width / (b.maxX - b.minX), box.height / (b.maxY - b.minY));
     expect(s).toBeCloseTo(rawFit * MIN_ZOOM_BOARD_MARGIN, 9);
   });
@@ -98,7 +100,7 @@ describe("clampCamera", () => {
 });
 
 describe("fitCamera", () => {
-  it("centers the scatter area in the viewport above the menu", () => {
+  it("centers the scatter area between the header and the menu", () => {
     const cam = fitCamera(ROWS, COLS, VP);
     const b = scatterBounds(ROWS, COLS);
     const left = b.minX * cam.scale + cam.x;
@@ -106,7 +108,7 @@ describe("fitCamera", () => {
     const top = b.minY * cam.scale + cam.y;
     const bottom = b.maxY * cam.scale + cam.y;
     expect(left).toBeCloseTo(VP.width - right, 6);
-    expect(top).toBeCloseTo(VP.height - BOARD_FIT_MENU_INSET_PX - bottom, 6);
+    expect(top - BOARD_FIT_HEADER_INSET_PX).toBeCloseTo(VP.height - BOARD_FIT_MENU_INSET_PX - bottom, 6);
   });
 
   it("yields a scale inside the clamp range", () => {

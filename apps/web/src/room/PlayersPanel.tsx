@@ -9,62 +9,64 @@ export interface PlayerView {
   placedCount: number;
 }
 
-/**
- * "Still brewing" slip (FR-18): room progress as a share of the pot. Always
- * on screen — hiding the table (below) never hides how far along the puzzle is.
- */
-export function BrewSlip({ placed, total }: { placed: number; total: number }) {
-  const pct = total > 0 ? Math.round((placed / total) * 100) : 0;
+/** A player's colour, always with their initial on it, so the colour is never the only thing that tells players apart. */
+export function PlayerMark({ name, color }: { name: string; color: string }) {
   return (
-    <div className="brew-slip">
-      <div className="brew-head">
-        <span className="script">still brewing…</span>
-        <span className="brew-pct">{pct}%</span>
-        <div className="brew-bar">
-          <span style={{ width: `${pct}%` }} />
-        </div>
-      </div>
-      <div className="brew-count">
-        {placed} <span>of {total} pieces placed</span>
-      </div>
-    </div>
+    <span className="player-mark" style={{ color }} aria-hidden="true">
+      <b>{name.charAt(0).toUpperCase()}</b>
+    </span>
   );
 }
 
 /**
- * Presence + scoring card (FR-20): everyone at the table with their color,
- * placed count and share. The local player's name is edited inline and
- * committed via onRename. "Held by" is intentionally not shown here — cursor
- * proximity already carries it (spec: don't over-engineer).
+ * Who's here (FR-20): everyone at the table with their placed count and
+ * share. The local player's name is edited inline and committed via
+ * onRename. Opened from the menu; closed by its × or Escape.
  */
 export function PlayersPanel({
   players,
   localGuestId,
   placed,
   onRename,
+  onClose,
 }: {
   players: PlayerView[];
   localGuestId: string | null;
   placed: number;
   onRename: (name: string) => void;
+  onClose: () => void;
 }) {
+  useEffect(() => {
+    function onKey(e: KeyboardEvent): void {
+      // The rename field handles its own Escape (cancel) and stops there.
+      if (e.key === "Escape" && !(e.target instanceof HTMLInputElement)) onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
   return (
-    <div className="players-panel">
+    <aside className="players" id="players" aria-label="Who's here">
+      <button type="button" className="players-close" aria-label="Close" onClick={onClose}>
+        ×
+      </button>
       <div className="players-head">
-        <span className="serif">At the table</span>
-        <span className="script">{players.length}</span>
+        <h2>Who&apos;s here</h2>
+        <span>{players.length} at the table</span>
       </div>
-      {players.map((p) => (
-        <PlayerRow
-          key={p.id}
-          player={p}
-          isSelf={p.id === localGuestId}
-          share={placed > 0 ? Math.round((p.placedCount / placed) * 100) : 0}
-          onRename={onRename}
-        />
-      ))}
-      <div className="players-foot">tap your own name to change it</div>
-    </div>
+      <div className="player-rows">
+        {players.map((p) => (
+          <PlayerRow
+            key={p.id}
+            player={p}
+            isSelf={p.id === localGuestId}
+            share={placed > 0 ? Math.round((p.placedCount / placed) * 100) : 0}
+            onRename={onRename}
+          />
+        ))}
+      </div>
+      <p className="players-foot">Tap your own name to change it. Counts are pieces placed.</p>
+    </aside>
   );
 }
 
@@ -94,14 +96,16 @@ function PlayerRow({
   }
 
   return (
-    <div className="player-row">
-      <span className="player-dot" style={{ background: player.color }} />
+    <div className="player">
+      <PlayerMark name={player.name} color={player.color} />
       {editing ? (
         <span className="player-name">
           <input
             autoFocus
+            aria-label="Your name"
             value={draft}
             maxLength={40}
+            onFocus={(e) => e.currentTarget.select()}
             onChange={(e) => setDraft(e.target.value)}
             onBlur={commit}
             onKeyDown={(e) => {
@@ -113,16 +117,13 @@ function PlayerRow({
             }}
           />
         </span>
-      ) : (
-        <span
-          className={`player-name${isSelf ? " self" : ""}`}
-          onClick={isSelf ? () => setEditing(true) : undefined}
-          title={isSelf ? "Click to rename" : undefined}
-          style={isSelf ? { cursor: "text" } : undefined}
-        >
+      ) : isSelf ? (
+        <button type="button" className="player-name self" title="Click to rename" onClick={() => setEditing(true)}>
           {player.name}
-          {isSelf && <span className="edit-hint">you</span>}
-        </span>
+          <span className="you">you</span>
+        </button>
+      ) : (
+        <span className="player-name">{player.name}</span>
       )}
       <span className="player-score">
         {player.placedCount}

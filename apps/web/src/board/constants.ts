@@ -48,6 +48,15 @@ export const MIN_ZOOM_BOARD_MARGIN = 0.92;
  * panel lies over the board and is cleared by panning (PAN_OVERSCROLL_PX).
  */
 export const BOARD_FIT_MENU_INSET_PX = 66;
+
+/**
+ * Canvas pixels held clear at the top of the visible board when fitting it,
+ * so the fit view never puts pieces under the room's header (the Leave link,
+ * the progress bar and the other players' cups), which lies on the table over
+ * the board. The mock's header is 92px (10px top padding + a 44px cup + its
+ * name and count lines), and its board starts 4px below it.
+ */
+export const BOARD_FIT_HEADER_INSET_PX = 96;
 /** A single cell fills this fraction of the smaller viewport dimension at max zoom. */
 export const MAX_ZOOM_CELL_FILL = 0.45;
 
