@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useEscapeToClose } from "./escape";
 import { ThemeSwitch } from "../theme-switcher";
 
 /**
@@ -80,13 +81,7 @@ export function RoomMenu({
 
 /** The picture held up to the lamp, like a print. Any click or Escape puts it back down. */
 function ImagePreviewOverlay({ imageUrl, onClose }: { imageUrl: string; onClose: () => void }) {
-  useEffect(() => {
-    function onKey(e: KeyboardEvent): void {
-      if (e.key === "Escape") onClose();
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  useEscapeToClose(onClose);
 
   return (
     <div className="overlay" onClick={onClose}>

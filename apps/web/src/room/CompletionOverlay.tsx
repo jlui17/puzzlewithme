@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect } from "react";
+import { useEscapeToClose } from "./escape";
 import { getTheme } from "../theme";
 import { useThemeId } from "../theme-switcher";
 import { PlayerMark } from "./PlayersPanel";
@@ -39,13 +39,7 @@ export function CompletionOverlay({
   const top = Math.max(1, ...contributions.map((c) => c.placedCount));
   const hands = contributions.length;
 
-  useEffect(() => {
-    function onKey(e: KeyboardEvent): void {
-      if (e.key === "Escape") onClose();
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  useEscapeToClose(onClose);
 
   return (
     <div

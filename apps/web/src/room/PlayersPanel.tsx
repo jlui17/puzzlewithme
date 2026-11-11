@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useEscapeToClose } from "./escape";
 
 export interface PlayerView {
   id: string;
@@ -36,14 +37,7 @@ export function PlayersPanel({
   onRename: (name: string) => void;
   onClose: () => void;
 }) {
-  useEffect(() => {
-    function onKey(e: KeyboardEvent): void {
-      // The rename field handles its own Escape (cancel) and stops there.
-      if (e.key === "Escape" && !(e.target instanceof HTMLInputElement)) onClose();
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  useEscapeToClose(onClose);
 
   return (
     <aside className="players" id="players" aria-label="Who's here">
