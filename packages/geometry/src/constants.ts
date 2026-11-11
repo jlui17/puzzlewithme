@@ -6,10 +6,10 @@
  *   (0, 0). Piece (row, col)'s correct cell origin (its top-left corner when
  *   assembled) is (col * CELL_SIZE, row * CELL_SIZE). The frame spans
  *   (0, 0) .. (cols * CELL_SIZE, rows * CELL_SIZE).
- * - The mat (the cloth the puzzle is worked on) is centered on the frame and
- *   sized to hold the pieces with room to sort, so its coordinates extend
- *   negative on the top/left of the frame (see playArea/matBounds in
- *   scatter.js). How far it reaches follows the piece count, not a fixed
+ * - The mat (the bounds the camera frames and clamps to; nothing is drawn on
+ *   it) is centered on the frame and sized to hold the pieces with room to
+ *   sort, so its coordinates extend negative on the top/left of the frame
+ *   (see playArea/matBounds in scatter.js). How far it reaches follows the piece count, not a fixed
  *   multiple of the frame.
  * - A group's position is the world coordinate of its anchor piece's cell
  *   origin. The anchor is the group's lowest piece id (row-major); every other
@@ -29,7 +29,7 @@ export const CELL_SIZE = 100;
  * Centre-to-centre spacing of scattered pieces, in cells. Above 1 so a cell's
  * footprint plus its jitter can't overlap its neighbour's — that separation is
  * what keeps every piece individually pickable (FR-7). 1.6 leaves a visible
- * gap of cloth between pieces rather than a tiled mosaic.
+ * gap of table between pieces rather than a tiled mosaic.
  */
 export const SCATTER_PITCH_CELLS = 1.6;
 
@@ -132,16 +132,16 @@ export const SCATTER_SALT = 0x85ebca6b;
 
 /**
  * The mat's width-to-height ratio, held constant whatever the picture's shape
- * is: the cloth is a piece of furniture, so it shouldn't turn portrait because
- * someone uploaded a portrait photo. 1.6 (16:10) is landscape enough to suit a
- * wide window. Widening only ever adds cloth beyond the sorting band, never
- * takes any away.
+ * is: the table is a piece of furniture, so the area shouldn't turn portrait
+ * because someone uploaded a portrait photo. 1.6 (16:10) is landscape enough
+ * to suit a wide window. Widening only ever adds room beyond the sorting band,
+ * never takes any away.
  */
 export const MAT_ASPECT = 1.6;
 
 /**
- * The stitched hem's inset from the mat's edge, as a fraction of the mat's
- * shorter side. Pieces scatter and clamp inside the hem (playArea), so the
- * dashed line a player sees is exactly the edge of where pieces can go.
+ * The margin between the play area (playArea) and the mat's edge, as a
+ * fraction of the mat's shorter side. Pieces scatter and clamp inside the play
+ * area, so the camera can frame all of it with this much table around it.
  */
 export const MAT_HEM_INSET_RATIO = 0.02;

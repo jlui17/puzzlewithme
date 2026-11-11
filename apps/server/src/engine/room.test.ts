@@ -398,7 +398,7 @@ describe("drop: merge and scoring (FR-11, FR-21)", () => {
     });
   });
 
-  it("clamps an out-of-bounds drop to the mat's hem (FR-15)", () => {
+  it("clamps an out-of-bounds drop to the play area (FR-15)", () => {
     const { engine } = makeEngine();
     const p1 = joinOk(engine);
     const out = dropOk(engine, p1.identity.id, "1-1", 99_999, 99_999);

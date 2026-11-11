@@ -112,11 +112,12 @@ function clampEdge(edge: number, worldSize: number, vpSize: number): number {
 
 /**
  * Initial camera: the pieces and the frame they ring, centered in the area
- * between the header and the menu. Fits scatterBounds rather than the whole mat, because the mat
- * is always landscape while the work is the picture's shape — fitting the cloth
- * on a tall phone screen shrank the pieces to specks between two bands of empty
- * table. The mat's spare corners are still reachable, just by zooming out
- * (minScale) or panning, rather than being on screen from the first frame.
+ * between the header and the menu. Fits scatterBounds rather than the whole
+ * mat, because the mat is always landscape while the work is the picture's
+ * shape — fitting the whole mat on a tall phone screen shrank the pieces to
+ * specks between two bands of empty table. The mat's spare corners are still
+ * reachable, just by zooming out (minScale) or panning, rather than being on
+ * screen from the first frame.
  */
 export function fitCamera(rows: number, cols: number, vp: Viewport): Camera {
   const b = scatterBounds(rows, cols);

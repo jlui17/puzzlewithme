@@ -283,10 +283,6 @@ export class BoardRenderer {
     this.applyCamera();
   }
 
-  onResize(): void {
-    this.setCamera(this.camera);
-  }
-
   screenToWorld(sx: number, sy: number): Vec2 {
     return screenToWorld(this.camera, sx, sy);
   }

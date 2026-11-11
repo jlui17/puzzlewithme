@@ -27,7 +27,7 @@ const SCATTER_PITCH = CELL_SIZE * SCATTER_PITCH_CELLS;
  *   (frameW + 2t)(frameH + 2t) - frameW * frameH = need
  *
  * which is a quadratic in t. A puzzle therefore gets a surface proportional to
- * how much cloth its pieces actually need — small puzzles stay compact instead
+ * how much room its pieces actually need — small puzzles stay compact instead
  * of scattering across a fixed multiple of the frame, which is what made them
  * tedious to work on a phone.
  *
@@ -40,7 +40,7 @@ function sortingInset(rows: number, cols: number): number {
   const need = rows * cols * SCATTER_ROOM_FACTOR * SCATTER_PITCH * SCATTER_PITCH;
   const half = frameW + frameH;
   const t = (-half + Math.sqrt(half * half + 4 * need)) / 4;
-  // Floor: even a 4-piece puzzle wants a visible border of cloth, and the band
+  // Floor: even a 4-piece puzzle wants a visible border around the frame, and the band
   // must clear a piece's whole jittered footprint or no cell fits in it at all.
   return Math.max(t, FOOTPRINT + SCATTER_PITCH);
 }
@@ -66,14 +66,14 @@ export function scatterBounds(rows: number, cols: number): Bounds {
 /**
  * Where pieces may live: the sorting band widened to the mat's constant
  * landscape ratio. This is the rect initialScatter draws its cells from and
- * clampGroupToBoard clamps to, and the renderer traces the hem on it — so
- * "inside the dashed line" is one definition rather than three that drift.
+ * clampGroupToBoard clamps to — so "where pieces may go" is one definition
+ * rather than two that drift.
  */
 export function playArea(rows: number, cols: number): Bounds {
   const b = scatterBounds(rows, cols);
   const w = b.maxX - b.minX;
   const h = b.maxY - b.minY;
-  // Widen to MAT_ASPECT so the cloth is landscape whatever the picture's shape
+  // Widen to MAT_ASPECT so the area is landscape whatever the picture's shape
   // is; the extra only ever adds surface, never takes any away.
   const padX = (Math.max(w, h * MAT_ASPECT) - w) / 2;
   const padY = (Math.max(h, w / MAT_ASPECT) - h) / 2;
@@ -85,7 +85,7 @@ export function playArea(rows: number, cols: number): Bounds {
   };
 }
 
-/** The cloth: the play area plus the margin its stitched hem sits in. */
+/** The play area plus the MAT_HEM_INSET_RATIO margin: the bounds the camera frames and clamps to. Nothing draws it. */
 export function matBounds(rows: number, cols: number): Bounds {
   const p = playArea(rows, cols);
   const hem =
@@ -123,7 +123,7 @@ const FOOTPRINT = PIECE_HALF + OVERHANG + MAX_JITTER;
  * ordered by distance from the frame and only the nearest
  * `count * SCATTER_ROOM_FACTOR` are eligible, then shuffled. So pieces hug the
  * frame in a band no deeper than they need, land in a random order (piece 0 is
- * not always innermost), and leave the far corners of the cloth empty to sort
+ * not always innermost), and leave the far corners of the play area empty to sort
  * into. Filling the whole surface uniformly instead put every piece a long pan
  * away from the frame on a phone.
  */
