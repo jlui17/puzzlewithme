@@ -18,6 +18,7 @@ import { Cup } from "../scene/Cup";
 import { Scene } from "../scene/Scene";
 import { Sill } from "../scene/Sill";
 import { ROOM_TILT_DEG, Table } from "../scene/Table";
+import type { TableHandle } from "../scene/table-handle";
 import { WindowBand } from "../scene/WindowBand";
 import { CompletionOverlay, type Contribution } from "./CompletionOverlay";
 import { BrewSlip, PlayersPanel, type PlayerView } from "./PlayersPanel";
@@ -153,6 +154,8 @@ function StateCard({ children }: { children: ReactNode }) {
 function RoomLive({ settings }: { settings: RoomSettings }) {
   const totalPieces = settings.rows * settings.cols;
   const pointerRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const tableRef = useRef<TableHandle>(null);
+  const zoomRef = useRef<((factor: number) => void) | null>(null);
   const [toast, setToast] = useState<{ name: string; x: number; y: number; key: number } | null>(
     null,
   );
@@ -262,8 +265,15 @@ function RoomLive({ settings }: { settings: RoomSettings }) {
     <Scene screen="room">
       <WindowBand rainPaused={completed} />
       <Sill />
-      <Table tilt={ROOM_TILT_DEG}>
-        <BoardCanvas sync={sync} settings={settings} interactive={!completed} pointerRef={pointerRef} />
+      <Table ref={tableRef} tilt={ROOM_TILT_DEG}>
+        <BoardCanvas
+          sync={sync}
+          settings={settings}
+          interactive={!completed}
+          pointerRef={pointerRef}
+          table={tableRef}
+          zoomRef={zoomRef}
+        />
       </Table>
 
       <ConnectionBadge status={panel.connection} />

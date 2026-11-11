@@ -12,12 +12,9 @@ import { InputController, type CanvasPlacement } from "../board/input";
 import { BoardRenderer } from "../board/renderer";
 import { clientToPlane } from "../board/tilt";
 import { imageUrl } from "../config";
+import { ROOM_TILT_DEG } from "../scene/Table";
 import type { TableHandle } from "../scene/table-handle";
 import { subscribeTheme } from "../theme";
-import { StandInTable } from "./StandInTable";
-
-/** The room table's resting tilt, at the fit zoom. The scene's Table exports the same constant. */
-const ROOM_TILT_DEG = 12;
 
 /**
  * The board's box on the Table's plane. Pinned to the plane's top-left corner,
@@ -50,20 +47,19 @@ export function BoardCanvas({
   interactive: boolean;
   /** Last pointer position in canvas CSS pixels (on the plane), for placing the held-by toast. */
   pointerRef: React.MutableRefObject<{ x: number; y: number }>;
-  /** The Table the board lies on. Without one the board brings its own stand-in. */
-  table?: React.RefObject<TableHandle | null>;
+  /** The Table the board lies on. */
+  table: React.RefObject<TableHandle | null>;
   /** Set to the zoom buttons' action while the board is up: zoom by a factor, eased. */
   zoomRef?: React.MutableRefObject<((factor: number) => void) | null>;
 }) {
   const mountRef = useRef<HTMLDivElement>(null);
-  const standInRef = useRef<TableHandle>(null);
   const interactiveRef = useRef(interactive);
   interactiveRef.current = interactive;
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const mount = mountRef.current;
-    const tableHandle = (table ?? standInRef).current;
+    const tableHandle = table.current;
     if (!mount || !tableHandle) return;
 
     let disposed = false;
@@ -202,11 +198,5 @@ export function BoardCanvas({
       </div>
     );
   }
-  const board = <div className="board-mount" ref={mountRef} style={MOUNT_STYLE} />;
-  if (table) return board;
-  return (
-    <StandInTable ref={standInRef} tilt={ROOM_TILT_DEG}>
-      {board}
-    </StandInTable>
-  );
+  return <div className="board-mount" ref={mountRef} style={MOUNT_STYLE} />;
 }
