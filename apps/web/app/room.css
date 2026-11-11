@@ -149,11 +149,11 @@
 .player-score { font-size: 13px; color: var(--ink-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .players-foot { margin: 12px 0 0; font-size: 12.5px; color: var(--ink-3); }
 
-/* Connection: a pill just under the wall; the words say the state, the dot only moves. */
+/* Connection: a pill under the wall, below the progress line so it never hides it; the words say the state, the dot only moves. */
 .conn-badge {
   position: absolute;
   left: 50%;
-  top: calc(clamp(48px, 6vh, 64px) + 38px + 10px);
+  top: calc(clamp(48px, 6vh, 64px) + 38px + 48px);
   transform: translateX(-50%);
   display: inline-flex; align-items: center; gap: 8px;
   padding: 6px 14px;
@@ -229,13 +229,18 @@
   font-weight: 600;
   font-size: 15px;
   box-shadow: 0 0 0 1px rgba(255,255,255,.08) inset, 0 8px 24px rgba(241,178,90,.28);
-  transition: transform .15s, box-shadow .15s;
+  position: relative;
+  transition: top .15s, box-shadow .15s;
 }
-.scene[data-screen="room"] .start-btn:hover { transform: translateY(-1px); box-shadow: 0 10px 28px rgba(241,178,90,.4); }
+/* top, not transform: an element with a transform on the tilted table never receives the click. */
+.scene[data-screen="room"] .start-btn:hover { top: -1px; box-shadow: 0 10px 28px rgba(241,178,90,.4); }
 
 /* ---------- A card on the empty table: loading, not found, full, errors ---------- */
+/* In the board's place, so the header around it stays where it was. */
+.board-error { position: absolute; inset: 0; display: flex; flex-direction: column; }
 .table-card-wrap { flex: 1; display: flex; align-items: center; justify-content: center; padding: 24px 16px; }
-.table-card { width: min(460px, 100%); text-align: center; display: flex; flex-direction: column; align-items: center; transform-style: preserve-3d; }
+/* No preserve-3d here: inside a 3D context on the tilted plane, Chrome stops hit-testing the card's button. */
+.table-card { width: min(460px, 100%); text-align: center; display: flex; flex-direction: column; align-items: center; }
 .table-card .stand { margin-bottom: 10px; }
 .table-card h2 { font-family: var(--fserif); font-style: italic; font-size: 30px; font-variation-settings: "opsz" 72; line-height: 1.1; }
 .table-card p { margin: 8px 0 0; color: var(--ink-3); font-size: 15px; }
@@ -278,7 +283,7 @@
   .menu-btn svg { width: 20px; height: 20px; }
   .menu-sep { display: none; }
   .players { position: fixed; right: max(16px, env(safe-area-inset-right, 0px)); left: max(16px, env(safe-area-inset-left, 0px)); width: auto; bottom: calc(72px + env(safe-area-inset-bottom, 0px)); }
-  .conn-badge { top: calc(64px + 30px + 10px); }
+  .conn-badge { top: calc(64px + 30px + 150px); }
   .finish-card { padding: 22px 20px 20px; }
   .finish-card h2 { font-size: 34px; }
 }

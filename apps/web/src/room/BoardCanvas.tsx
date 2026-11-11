@@ -196,10 +196,12 @@ export function BoardCanvas({
 
   if (error) {
     return (
-      <TableCard>
-        <h2>The picture didn&apos;t arrive</h2>
-        <p>{error}</p>
-      </TableCard>
+      <div className="board-error">
+        <TableCard>
+          <h2>The picture didn&apos;t arrive</h2>
+          <p>{error}</p>
+        </TableCard>
+      </div>
     );
   }
   return <div className="board-mount" ref={mountRef} style={MOUNT_STYLE} />;
