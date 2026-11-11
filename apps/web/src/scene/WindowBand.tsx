@@ -8,12 +8,13 @@ const RAIN = rainArt();
 /**
  * The band of window across the top of every screen: a rainy street, the
  * lamp's halo and reflection in the glass, and the title written in the fog.
- * Decorative, so hidden from assistive tech.
+ * The title is the page's heading; everything else is decoration, hidden from
+ * assistive tech.
  */
 export function WindowBand({ rainPaused = false }: { rainPaused?: boolean }) {
   return (
-    <div className="window" aria-hidden="true">
-      <svg className="street" viewBox="0 0 1000 400" preserveAspectRatio="xMidYMax slice">
+    <div className="window">
+      <svg className="street" aria-hidden="true" viewBox="0 0 1000 400" preserveAspectRatio="xMidYMax slice">
         <defs>
           <linearGradient id="wet-grad" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0" stopColor="#ffd79a" stopOpacity=".45" />
@@ -36,7 +37,7 @@ export function WindowBand({ rainPaused = false }: { rainPaused?: boolean }) {
           ))}
         </g>
       </svg>
-      <div className="bokeh">
+      <div className="bokeh" aria-hidden="true">
         {BOKEH.map((d, i) => (
           <i
             key={i}
@@ -51,7 +52,7 @@ export function WindowBand({ rainPaused = false }: { rainPaused?: boolean }) {
           />
         ))}
       </div>
-      <svg className={rainPaused ? "rain is-paused" : "rain"} viewBox="0 0 1000 400" preserveAspectRatio="none">
+      <svg className={rainPaused ? "rain is-paused" : "rain"} aria-hidden="true" viewBox="0 0 1000 400" preserveAspectRatio="none">
         {RAIN.layers.map((layer) => (
           <g key={layer.className} className={layer.className}>
             {layer.lines.map((l, i) => (
@@ -60,20 +61,20 @@ export function WindowBand({ rainPaused = false }: { rainPaused?: boolean }) {
           </g>
         ))}
       </svg>
-      <svg className="drops" viewBox="0 0 1000 400" preserveAspectRatio="none">
+      <svg className="drops" aria-hidden="true" viewBox="0 0 1000 400" preserveAspectRatio="none">
         {RAIN.drops.map((d, i) => (
           <ellipse key={i} {...d} />
         ))}
       </svg>
-      <div className="fog" />
-      <div className="lamp-halo" />
-      <div className="mullion" />
+      <div className="fog" aria-hidden="true" />
+      <div className="lamp-halo" aria-hidden="true" />
+      <div className="mullion" aria-hidden="true" />
       <h1 className="fog-title">
         PuzzleWithMe
-        <span className="drip" />
+        <span className="drip" aria-hidden="true" />
         <small>one jigsaw, as many hands as you like</small>
       </h1>
-      <div className="lamp-reflection">
+      <div className="lamp-reflection" aria-hidden="true">
         <svg viewBox="0 0 150 178">
           <use href="#lamp-shape" />
         </svg>
